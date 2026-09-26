@@ -59,7 +59,7 @@
   <!-- Supabase Cloud Client (Local) -->
   <script src="./vendor/supabase.js"></script>
 
-  <link rel="stylesheet" href="./styles.css?v=10">
+  <link rel="stylesheet" href="./styles.css?v=20">
 </head>
 <body class="bg-dark-900 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -96,15 +96,13 @@
         <button onclick="switchTab('favorites')" id="nav-btn-favorites" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
           <i data-lucide="star" class="w-4 h-4 text-amber-400"></i> Favorites
         </button>
+        <button onclick="switchTab('profile')" id="nav-btn-profile" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
+          <i data-lucide="user" class="w-4 h-4"></i> Account
+        </button>
       </nav>
 
       <!-- USER PROFILE & TOP ACTIONS -->
       <div class="flex items-center gap-2">
-        <button onclick="openCloudConfigModal()" id="cloud-status-badge" class="px-2.5 py-1.5 rounded-xl bg-dark-700/80 hover:bg-dark-600 text-slate-300 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition" title="Cloud Sync Settings">
-          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" id="cloud-status-dot"></span>
-          <span class="hidden sm:inline" id="cloud-status-text">Cloud Sync</span>
-        </button>
-
         <button onclick="openAddLocationModal()" class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium bg-dark-700 hover:bg-dark-600 text-slate-200 border border-slate-700 transition">
           <i data-lucide="map-pin" class="w-4 h-4 text-accent-400"></i>
           <span>+ Location</span>
@@ -325,7 +323,7 @@
           </div>
           <div id="kpi-total-events" class="text-3xl font-extrabold text-white">0</div>
           <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-            <span class="text-emerald-400 flex items-center">Private log</span>
+            <span class="text-emerald-400 flex items-center">Cloud Synced</span>
           </div>
         </div>
 
@@ -497,6 +495,78 @@
       </div>
     </section>
 
+    <!-- 5. ACCOUNT / PROFILE TAB -->
+    <section id="tab-profile" class="tab-content hidden max-w-3xl mx-auto w-full px-4 lg:px-8 py-6 flex-1">
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          <i data-lucide="user-check" class="w-6 h-6 text-brand-400"></i> Account & Cloud Sync
+        </h2>
+        <p class="text-sm text-slate-400">Manage your session, password, and multi-device cloud synchronization.</p>
+      </div>
+
+      <div class="space-y-6">
+        <!-- USER INFO CARD -->
+        <div class="bg-dark-800 p-6 rounded-3xl border border-slate-700/80 shadow-xl">
+          <div class="flex items-center justify-between pb-4 border-b border-slate-700 mb-4">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-accent-500 text-white font-black text-lg flex items-center justify-center shadow-lg shadow-brand-500/20" id="profile-avatar-initials">
+                AL
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-white" id="profile-display-name">Active User</h3>
+                <p class="text-xs text-slate-400" id="profile-display-email">name@example.com</p>
+              </div>
+            </div>
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Signed In
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <button onclick="openChangePasswordModal()" class="py-3 px-4 rounded-2xl bg-dark-700 hover:bg-dark-600 text-slate-200 text-xs font-bold border border-slate-600 flex items-center justify-center gap-2 transition">
+              <i data-lucide="key" class="w-4 h-4 text-accent-400"></i> Change Password
+            </button>
+            <button onclick="logout(true)" class="py-3 px-4 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30 flex items-center justify-center gap-2 transition">
+              <i data-lucide="log-out" class="w-4 h-4"></i> Sign Out
+            </button>
+          </div>
+        </div>
+
+        <!-- CLOUD RECOVERY & SYNC TOOL -->
+        <div class="bg-dark-800 p-6 rounded-3xl border border-slate-700/80 shadow-xl">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-bold text-white text-base flex items-center gap-2">
+              <i data-lucide="cloud-upload" class="w-5 h-5 text-accent-400"></i> Sync & Recover Local Data to Cloud
+            </h4>
+          </div>
+          <p class="text-xs text-slate-400 mb-4 leading-relaxed">
+            If you created locations or events offline or on another browser session, click below to upload all your stored events into your Supabase Cloud Database.
+          </p>
+          <button onclick="triggerManualDataMigration()" class="w-full py-3 rounded-2xl bg-gradient-to-r from-accent-600 to-brand-600 hover:opacity-90 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-brand-500/20 transition">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i> Upload & Sync Local Events to Supabase
+          </button>
+        </div>
+
+        <!-- EXPORT ALL DATA -->
+        <div class="bg-dark-800 p-6 rounded-3xl border border-slate-700/80 shadow-xl flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h4 class="font-bold text-white text-sm flex items-center gap-1.5">
+              <i data-lucide="download" class="w-4 h-4 text-brand-400"></i> Data Backup & Export
+            </h4>
+            <p class="text-xs text-slate-400">Download a full JSON or CSV backup of all your logged spots.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="exportDataJSON()" class="px-3.5 py-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-200 text-xs font-semibold border border-slate-600">
+              JSON
+            </button>
+            <button onclick="exportEventsCSV()" class="px-3.5 py-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-200 text-xs font-semibold border border-slate-600">
+              CSV
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <!-- MOBILE BOTTOM NAVIGATION BAR -->
@@ -519,9 +589,9 @@
       <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
       <span>KPIs</span>
     </button>
-    <button onclick="switchTab('favorites')" id="mobile-nav-favorites" class="flex flex-col items-center gap-1 text-slate-400 text-[10px] font-medium py-1">
-      <i data-lucide="star" class="w-5 h-5"></i>
-      <span>Favorites</span>
+    <button onclick="switchTab('profile')" id="mobile-nav-profile" class="flex flex-col items-center gap-1 text-slate-400 text-[10px] font-medium py-1">
+      <i data-lucide="user" class="w-5 h-5"></i>
+      <span>Account</span>
     </button>
   </nav>
 
@@ -550,10 +620,10 @@
       <form id="form-cloud-config" onsubmit="handleCloudConfigSubmit(event)" class="space-y-4">
         <div class="p-3.5 bg-dark-900/80 rounded-2xl border border-slate-700 text-xs text-slate-300 space-y-2">
           <div class="flex items-center gap-2 font-bold text-white">
-            <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i> Free Supabase Cloud Database:
+            <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i> Connected Supabase Cloud:
           </div>
           <p class="text-[11px] text-slate-400 leading-relaxed">
-            Create a free project at <a href="https://supabase.com" target="_blank" class="text-accent-400 underline">supabase.com</a>, run the SQL script in <code class="text-brand-300">supabase_schema.sql</code>, and paste your Project URL & Anon Key below to enable real-time cloud sync across every device!
+            Project: <code class="text-brand-300">bfwlzobdpbuippfbbjud.supabase.co</code> (Active). Your data syncs in real-time with PostgreSQL Row Level Security.
           </p>
         </div>
 
@@ -873,7 +943,7 @@
         <div class="p-4">
           <h4 id="share-title" class="text-lg font-bold text-white mb-1">Event Title</h4>
           <p id="share-loc" class="text-xs text-brand-300 font-medium mb-2 flex items-center gap-1">
-            <i data-lucide="map-pin" class="w-3 h-3"></i> Location
+            <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Location
           </p>
           <p id="share-desc" class="text-xs text-slate-300 line-clamp-2 italic mb-2">Description...</p>
           <p id="share-date" class="text-[11px] text-slate-500">Date</p>
@@ -906,6 +976,6 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <script src="./app.js?v=15"></script>
+  <script src="./app.js?v=25"></script>
 </body>
 </html>

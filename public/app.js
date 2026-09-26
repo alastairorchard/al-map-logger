@@ -1,7 +1,7 @@
-// AL - Map & Event Logger (Multi-User, Supabase Cloud Sync & Local Isolation)
+// AL - Map & Event Logger (Multi-User, Supabase Real-time Cloud Sync & Offline Migration)
 
 const DEFAULT_SUPABASE_URL = 'https://bfwlzobdpbuippfbbjud.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'sb_publishable_PcDpOFZptvEbE0wL8qDyLA_uqqkkf0A';
+const DEFAULT_SUPABASE_KEY = 'password';
 
 // State Management
 let state = {
@@ -47,13 +47,40 @@ function initIcons() {
 }
 
 // ==========================================
-// SUPABASE CLOUD SYNC INITIALIZATION
+// SUPABASE CLOUD CLIENT & REAL-TIME AUTH LISTENER
 // ==========================================
 function initCloudClient() {
   if (state.cloudConfig.url && state.cloudConfig.key && window.supabase) {
     try {
       state.supabase = window.supabase.createClient(state.cloudConfig.url, state.cloudConfig.key);
       updateCloudStatusUI(true);
+
+      // Listen for real-time authentication changes (login, logout, token refresh)
+      state.supabase.auth.onAuthStateChange((event, session) => {
+        if (session && session.user) {
+          state.currentUser = {
+            id: session.user.id,
+            username: session.user.email ? session.user.email.split('@')[0] : 'User',
+            email: session.user.email
+          };
+          state.authToken = session.access_token;
+          renderUserHeader();
+          renderProfileTab();
+          closeModal('modal-auth');
+
+          // Auto-migrate any local legacy events/locations to Supabase
+          migrateLocalDataToSupabase(session.user.id);
+          loadAllData();
+        } else if (event === 'SIGNED_OUT') {
+          state.currentUser = null;
+          state.authToken = null;
+          state.locations = [];
+          state.events = [];
+          renderUserHeader();
+          renderProfileTab();
+          openAuthModal('login');
+        }
+      });
     } catch (e) {
       console.warn('Supabase initialization failed:', e);
       state.supabase = null;
@@ -115,6 +142,92 @@ function disconnectCloudSync() {
   closeModal('modal-cloud-config');
   showToast('Reset to local mode', 'info');
   logout(false);
+}
+
+// ==========================================
+// LOCAL DATA MIGRATION TO SUPABASE
+// ==========================================
+async function migrateLocalDataToSupabase(userId) {
+  if (!state.supabase || !userId) return;
+
+  try {
+    let localLocs = [];
+    let localEvts = [];
+
+    // Gather any legacy or un-synced data
+    const uLocs = JSON.parse(localStorage.getItem(`al_user_${userId}_locations`) || '[]');
+    const uEvts = JSON.parse(localStorage.getItem(`al_user_${userId}_events`) || '[]');
+    const gLocs = JSON.parse(localStorage.getItem('al_locations') || '[]');
+    const gEvts = JSON.parse(localStorage.getItem('al_events') || '[]');
+
+    localLocs = [...uLocs, ...gLocs];
+    localEvts = [...uEvts, ...gEvts];
+
+    // Remove duplicates
+    const uniqueLocs = [];
+    const seenLocIds = new Set();
+    for (const l of localLocs) {
+      if (l && l.id && !seenLocIds.has(l.id)) {
+        seenLocIds.add(l.id);
+        uniqueLocs.push(l);
+      }
+    }
+
+    const uniqueEvts = [];
+    const seenEvtIds = new Set();
+    for (const ev of localEvts) {
+      if (ev && ev.id && !seenEvtIds.has(ev.id)) {
+        seenEvtIds.add(ev.id);
+        uniqueEvts.push(ev);
+      }
+    }
+
+    if (uniqueLocs.length > 0) {
+      for (const loc of uniqueLocs) {
+        await state.supabase.from('locations').upsert({
+          id: loc.id,
+          name: loc.name,
+          category: loc.category || 'Other',
+          lat: parseFloat(loc.lat),
+          lng: parseFloat(loc.lng),
+          address: loc.address || '',
+          notes: loc.notes || '',
+          user_id: userId
+        }, { onConflict: 'id' });
+      }
+    }
+
+    if (uniqueEvts.length > 0) {
+      for (const evt of uniqueEvts) {
+        await state.supabase.from('events').upsert({
+          id: evt.id,
+          location_id: evt.location_id,
+          name: evt.name,
+          date: evt.date,
+          description: evt.description || '',
+          score: parseFloat(evt.score) || 5.0,
+          photo_url: evt.photo_url || '',
+          favorite: evt.favorite ? 1 : 0,
+          tags: evt.tags || '',
+          user_id: userId
+        }, { onConflict: 'id' });
+      }
+    }
+  } catch (e) {
+    console.warn('Migration to Supabase error:', e);
+  }
+}
+
+function triggerManualDataMigration() {
+  if (!state.currentUser) {
+    showToast('Please sign in first', 'error');
+    return;
+  }
+  showToast('Syncing local events to Supabase...', 'info');
+  migrateLocalDataToSupabase(state.currentUser.id).then(() => {
+    showToast('Local events synced to Cloud database! ☁️⭐', 'success');
+    loadAllData();
+  });
 }
 
 // ==========================================
@@ -246,15 +359,19 @@ function checkAuthAndLoad() {
       if (data && data.session && data.session.user) {
         state.currentUser = {
           id: data.session.user.id,
-          username: data.session.user.email?.split('@')[0] || 'User',
+          username: data.session.user.email ? data.session.user.email.split('@')[0] : 'User',
           email: data.session.user.email
         };
         state.authToken = data.session.access_token;
         renderUserHeader();
+        renderProfileTab();
         closeModal('modal-auth');
+
+        migrateLocalDataToSupabase(data.session.user.id);
         loadAllData();
       } else {
         renderUserHeader();
+        renderProfileTab();
         openAuthModal('login');
       }
     });
@@ -263,6 +380,7 @@ function checkAuthAndLoad() {
 
   if (!state.authToken) {
     renderUserHeader();
+    renderProfileTab();
     openAuthModal('login');
     return;
   }
@@ -281,6 +399,7 @@ function checkAuthAndLoad() {
       if (data && data.user) {
         state.currentUser = data.user;
         renderUserHeader();
+        renderProfileTab();
         closeModal('modal-auth');
         loadAllData();
       }
@@ -291,9 +410,10 @@ function checkAuthAndLoad() {
 }
 
 function loadClientSession() {
-  const token = state.authToken;
+  const token = password;
   if (!token) {
     renderUserHeader();
+    renderProfileTab();
     openAuthModal('login');
     return;
   }
@@ -303,6 +423,7 @@ function loadClientSession() {
     if (rawUser) {
       state.currentUser = JSON.parse(rawUser);
       renderUserHeader();
+      renderProfileTab();
       closeModal('modal-auth');
       loadAllData();
       return;
@@ -329,17 +450,14 @@ function renderUserHeader() {
   if (!container) return;
 
   if (state.currentUser) {
-    const initials = state.currentUser.username.slice(0, 2).toUpperCase();
+    const initials = (state.currentUser.email || state.currentUser.username || 'AL').slice(0, 2).toUpperCase();
     container.innerHTML = `
       <div class="flex items-center gap-1.5">
-        <div class="flex items-center gap-2 bg-dark-700/80 px-2.5 py-1.5 rounded-xl border border-slate-700">
+        <button onclick="switchTab('profile')" class="flex items-center gap-2 bg-dark-700/80 hover:bg-dark-600 px-2.5 py-1.5 rounded-xl border border-slate-700 transition" title="View Account">
           <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-brand-600 to-accent-500 text-white font-black text-xs flex items-center justify-center">
             ${initials}
           </div>
-          <span class="text-xs font-bold text-white max-w-[100px] truncate">${escapeHtml(state.currentUser.username)}</span>
-        </div>
-        <button onclick="openChangePasswordModal()" class="p-2 rounded-xl text-slate-400 hover:text-accent-400 hover:bg-dark-700 transition" title="Change Password">
-          <i data-lucide="key" class="w-4 h-4"></i>
+          <span class="text-xs font-bold text-white max-w-[110px] truncate">${escapeHtml(state.currentUser.email || state.currentUser.username)}</span>
         </button>
         <button onclick="logout(true)" class="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-dark-700 transition" title="Sign Out">
           <i data-lucide="log-out" class="w-4 h-4"></i>
@@ -348,12 +466,28 @@ function renderUserHeader() {
     `;
   } else {
     container.innerHTML = `
-      <button onclick="openAuthModal('login')" class="px-3 py-1.5 rounded-xl bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 text-xs font-bold border border-brand-500/30 transition">
+      <button onclick="openAuthModal('login')" class="px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold shadow-lg shadow-brand-600/30 transition">
         Sign In
       </button>
     `;
   }
   initIcons();
+}
+
+function renderProfileTab() {
+  const initialsEl = document.getElementById('profile-avatar-initials');
+  const nameEl = document.getElementById('profile-display-name');
+  const emailEl = document.getElementById('profile-display-email');
+
+  if (state.currentUser) {
+    const initials = (state.currentUser.email || state.currentUser.username || 'AL').slice(0, 2).toUpperCase();
+    if (initialsEl) initialsEl.innerText = initials;
+    if (nameEl) nameEl.innerText = state.currentUser.username || 'User';
+    if (emailEl) emailEl.innerText = state.currentUser.email || 'No email associated';
+  } else {
+    if (nameEl) nameEl.innerText = 'Guest (Not Signed In)';
+    if (emailEl) emailEl.innerText = 'Please sign in to sync your data';
+  }
 }
 
 function openAuthModal(mode = 'login') {
@@ -378,7 +512,6 @@ function toggleAuthMode(mode) {
     ? 'flex-1 py-2 text-xs font-bold rounded-lg transition bg-brand-600 text-white shadow'
     : 'flex-1 py-2 text-xs font-bold rounded-lg transition text-slate-400 hover:text-white';
 
-  document.getElementById('auth-email-group').classList.toggle('hidden', !isReg && !state.supabase);
   document.getElementById('auth-submit-btn').innerText = isReg ? 'Create Account' : 'Sign In';
 }
 
@@ -406,8 +539,10 @@ function handleAuthSubmit(e) {
           showToast('Account created & signed in! ⭐', 'success');
           checkAuthAndLoad();
         } else if (data && data.user) {
-          showToast('Confirmation email sent to ' + email, 'info');
-          toggleAuthMode('login');
+          showToast('Account created! Logging in...', 'success');
+          state.supabase.auth.signInWithPassword({ email: email, password }).then(() => {
+            checkAuthAndLoad();
+          });
         }
       });
     } else {
@@ -425,7 +560,7 @@ function handleAuthSubmit(e) {
 
   // 2. Otherwise use local server or client auth
   const endpoint = state.authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
-  const payload = { username, password, email };
+  const payload = { username: email.split('@')[0], email, password };
 
   fetch(endpoint, {
     method: 'POST',
@@ -434,7 +569,7 @@ function handleAuthSubmit(e) {
   })
     .then(r => {
       if (r.status === 404 || r.status === 405) {
-        return handleClientAuth(state.authMode, username, password, email);
+        return handleClientAuth(state.authMode, email.split('@')[0], password, email);
       }
       return r.json().then(data => ({ status: r.status, data }));
     })
@@ -451,11 +586,12 @@ function handleAuthSubmit(e) {
 
       closeModal('modal-auth');
       renderUserHeader();
+      renderProfileTab();
       showToast(state.authMode === 'register' ? 'Welcome to AL! 🎉 Account created.' : `Welcome back, ${data.user.username}! ⚡`, 'success');
       loadAllData();
     })
     .catch(() => {
-      handleClientAuth(state.authMode, username, password, email).then(({ status, data }) => {
+      handleClientAuth(state.authMode, email.split('@')[0], password, email).then(({ status, data }) => {
         if (status < 400) {
           state.authToken = data.token;
           state.currentUser = data.user;
@@ -463,6 +599,7 @@ function handleAuthSubmit(e) {
           localStorage.setItem('al_current_user', JSON.stringify(data.user));
           closeModal('modal-auth');
           renderUserHeader();
+          renderProfileTab();
           showToast(`Welcome, ${data.user.username}!`, 'success');
           loadAllData();
         } else {
@@ -496,9 +633,9 @@ function handleClientAuth(mode, username, password, email) {
       data: { user: { id: user.id, username: user.username, email: user.email }, token: `client_token_${user.id}` }
     });
   } else {
-    const user = users.find(u => u.username === cleanUsername && u.password === password);
+    const user = users.find(u => (u.username === cleanUsername || u.email === email) && u.password === password);
     if (!user) {
-      return Promise.resolve({ status: 401, data: { error: 'Invalid username or password.' } });
+      return Promise.resolve({ status: 401, data: { error: 'Invalid email or password.' } });
     }
     return Promise.resolve({
       status: 200,
@@ -589,6 +726,7 @@ function logout(notify = true) {
   localStorage.removeItem('al_current_user');
 
   renderUserHeader();
+  renderProfileTab();
   if (markersLayer) markersLayer.clearLayers();
   renderLocationCarousel();
   renderEventsTable([]);
@@ -623,7 +761,7 @@ function switchTab(tabId) {
     activeNavBtn.classList.remove('text-slate-400');
   }
 
-  ['map', 'events', 'kpis', 'favorites'].forEach(t => {
+  ['map', 'events', 'kpis', 'favorites', 'profile'].forEach(t => {
     const mBtn = document.getElementById(`mobile-nav-${t}`);
     if (mBtn) {
       if (t === tabId) {
@@ -644,6 +782,8 @@ function switchTab(tabId) {
     loadKPIs();
   } else if (tabId === 'favorites') {
     loadFavoritesGrid();
+  } else if (tabId === 'profile') {
+    renderProfileTab();
   }
 
   initIcons();
@@ -853,24 +993,9 @@ function openLocationDrawer(loc) {
     state.supabase.from('events').select('*').eq('location_id', loc.id).order('date', { ascending: false }).then(({ data, error }) => {
       renderDrawerEventsList(data || []);
     });
-  } else if (state.isStandaloneClient) {
+  } else {
     const evts = state.events.filter(e => e.location_id === loc.id);
     renderDrawerEventsList(evts);
-  } else {
-    fetchWithAuth(`/api/events?location_id=${loc.id}&sort=date&order=desc`)
-      .then(res => res.json())
-      .then(events => {
-        if (Array.isArray(events)) {
-          renderDrawerEventsList(events);
-        } else {
-          const evts = state.events.filter(e => e.location_id === loc.id);
-          renderDrawerEventsList(evts);
-        }
-      })
-      .catch(() => {
-        const evts = state.events.filter(e => e.location_id === loc.id);
-        renderDrawerEventsList(evts);
-      });
   }
 
   drawer.classList.remove('translate-y-full', 'md:translate-x-[120%]');
@@ -1019,28 +1144,7 @@ function loadAllData() {
     return;
   }
 
-  Promise.all([
-    fetchWithAuth('/api/locations').then(r => r.json()),
-    fetchWithAuth('/api/events').then(r => r.json()),
-    fetchWithAuth('/api/kpis').then(r => r.json())
-  ]).then(([locations, events, kpis]) => {
-    if (Array.isArray(locations)) {
-      state.locations = locations;
-      state.events = Array.isArray(events) ? events : [];
-      state.kpis = kpis || null;
-    } else {
-      loadFromClientDB();
-      return;
-    }
-
-    updateLocationSelectOptions();
-    renderMapMarkers();
-    renderLocationCarousel();
-    loadEventsTable();
-    loadKPIs();
-  }).catch(() => {
-    loadFromClientDB();
-  });
+  loadFromClientDB();
 }
 
 function loadFromClientDB() {
@@ -1209,29 +1313,10 @@ function renderEventsTable(events) {
 function loadKPIs() {
   if (!state.currentUser) return;
 
-  if (state.supabase || state.isStandaloneClient) {
-    state.kpis = ClientDB.computeKPIs(state.currentUser.id);
-    state.kpis.total_events = state.events.length;
-    state.kpis.total_locations = state.locations.length;
-    renderKPIDashboard(state.kpis);
-    return;
-  }
-
-  fetchWithAuth('/api/kpis')
-    .then(r => r.json())
-    .then(kpis => {
-      if (kpis && kpis.total_events !== undefined) {
-        state.kpis = kpis;
-        renderKPIDashboard(kpis);
-      } else {
-        state.kpis = ClientDB.computeKPIs(state.currentUser.id);
-        renderKPIDashboard(state.kpis);
-      }
-    })
-    .catch(() => {
-      state.kpis = ClientDB.computeKPIs(state.currentUser.id);
-      renderKPIDashboard(state.kpis);
-    });
+  state.kpis = ClientDB.computeKPIs(state.currentUser.id);
+  state.kpis.total_events = state.events.length;
+  state.kpis.total_locations = state.locations.length;
+  renderKPIDashboard(state.kpis);
 }
 
 function renderKPIDashboard(kpis) {
@@ -1520,33 +1605,12 @@ function handleLocationSubmit(e) {
     return;
   }
 
-  const method = id ? 'PUT' : 'POST';
-  const url = id ? `/api/locations/${id}` : '/api/locations';
-
-  fetchWithAuth(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-    .then(r => {
-      if (r.status === 404 || r.status === 405) {
-        return handleClientLocationSave(id, payload);
-      }
-      return r.json();
-    })
-    .then(() => {
-      closeModal('modal-location');
-      showToast(id ? 'Location updated!' : 'Location created!', 'success');
-      loadAllData();
-      if (map && !id) map.flyTo([lat, lng], 14);
-    })
-    .catch(() => {
-      handleClientLocationSave(id, payload).then(() => {
-        closeModal('modal-location');
-        showToast('Location saved locally!', 'success');
-        loadAllData();
-      });
-    });
+  handleClientLocationSave(id, payload).then(() => {
+    closeModal('modal-location');
+    showToast('Location saved!', 'success');
+    loadAllData();
+    if (map && !id) map.flyTo([lat, lng], 14);
+  });
 }
 
 function handleClientLocationSave(id, payload) {
@@ -1679,7 +1743,6 @@ async function handlePhotoFileSelected(input) {
     setPhotoPreview(compressedDataUrl);
   }
 
-  // Upload to Supabase Storage if connected
   if (state.supabase) {
     try {
       const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
@@ -1762,35 +1825,14 @@ function handleEventSubmit(e) {
     return;
   }
 
-  const method = id ? 'PUT' : 'POST';
-  const url = id ? `/api/events/${id}` : '/api/events';
-
-  fetchWithAuth(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-    .then(r => {
-      if (r.status === 404 || r.status === 405) {
-        return handleClientEventSave(id, payload);
-      }
-      return r.json();
-    })
-    .then(() => {
-      closeModal('modal-event');
-      showToast(id ? 'Event updated!' : 'Event logged successfully! ⭐', 'success');
-      loadAllData();
-      if (state.selectedLocation && state.selectedLocation.id === location_id) {
-        openLocationDrawer(state.selectedLocation);
-      }
-    })
-    .catch(() => {
-      handleClientEventSave(id, payload).then(() => {
-        closeModal('modal-event');
-        showToast('Event saved locally! ⭐', 'success');
-        loadAllData();
-      });
-    });
+  handleClientEventSave(id, payload).then(() => {
+    closeModal('modal-event');
+    showToast('Event saved! ⭐', 'success');
+    loadAllData();
+    if (state.selectedLocation && state.selectedLocation.id === location_id) {
+      openLocationDrawer(state.selectedLocation);
+    }
+  });
 }
 
 function handleClientEventSave(id, payload) {
@@ -1826,23 +1868,10 @@ function toggleFavorite(id, e) {
     return;
   }
 
-  fetchWithAuth(`/api/events/${id}/favorite`, { method: 'POST' })
-    .then(r => {
-      if (r.status === 404 || r.status === 405) {
-        return toggleClientFavorite(id);
-      }
-      return r.json();
-    })
-    .then(res => {
-      showToast(res && res.favorite ? 'Added to favorites! ⭐' : 'Removed from favorites', 'info');
-      loadAllData();
-    })
-    .catch(() => {
-      toggleClientFavorite(id).then(res => {
-        showToast(res.favorite ? 'Added to favorites! ⭐' : 'Removed from favorites', 'info');
-        loadAllData();
-      });
-    });
+  toggleClientFavorite(id).then(res => {
+    showToast(res.favorite ? 'Added to favorites! ⭐' : 'Removed from favorites', 'info');
+    loadAllData();
+  });
 }
 
 function toggleClientFavorite(id) {
@@ -1871,23 +1900,10 @@ function deleteEvent(id) {
     return;
   }
 
-  fetchWithAuth(`/api/events/${id}`, { method: 'DELETE' })
-    .then(r => {
-      if (r.status === 404 || r.status === 405) {
-        return deleteClientEvent(id);
-      }
-      return r.json();
-    })
-    .then(() => {
-      showToast('Event deleted', 'info');
-      loadAllData();
-    })
-    .catch(() => {
-      deleteClientEvent(id).then(() => {
-        showToast('Event deleted', 'info');
-        loadAllData();
-      });
-    });
+  deleteClientEvent(id).then(() => {
+    showToast('Event deleted', 'info');
+    loadAllData();
+  });
 }
 
 function deleteClientEvent(id) {
@@ -1959,7 +1975,7 @@ function exportDataJSON() {
   const data = {
     app: 'AL',
     version: '1.0.0',
-    user: state.currentUser ? state.currentUser.username : 'Guest',
+    user: state.currentUser ? (state.currentUser.email || state.currentUser.username) : 'Guest',
     exported_at: new Date().toISOString(),
     locations: state.locations,
     events: state.events
