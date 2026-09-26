@@ -517,36 +517,51 @@ function toggleAuthMode(mode) {
 
 function handleAuthSubmit(e) {
   e.preventDefault();
-  const email = document.getElementById('auth-input-email').value.trim();
+  const rawInput = document.getElementById('auth-input-email').value.trim();
   const password = document.getElementById('auth-input-password').value;
+
+  // Accept either full email or simple username (e.g. "alastair" -> "alastair@al-map.app")
+  const authEmail = rawInput.includes('@') ? rawInput.toLowerCase() : `${rawInput.toLowerCase()}@al-map.app`;
 
   // 1. If Supabase Cloud Client is connected, authenticate through Supabase
   if (state.supabase) {
     const redirectUrl = window.location.origin + window.location.pathname;
     if (state.authMode === 'register') {
       state.supabase.auth.signUp({
-        email: email,
+        email: authEmail,
         password: password,
         options: {
           emailRedirectTo: redirectUrl
         }
       }).then(({ data, error }) => {
         if (error) {
+          if (error.message && error.message.toLowerCase().includes('already registered')) {
+            return state.supabase.auth.signInWithPassword({ email: authEmail, password }).then(({ data: logData, error: logErr }) => {
+              if (logErr) {
+                showToast('Email/Username already exists. Please verify password.', 'error');
+              } else {
+                showToast('Signed in successfully! ⭐', 'success');
+                checkAuthAndLoad();
+              }
+            });
+          }
           showToast(error.message, 'error');
           return;
         }
-        if (data && data.session) {
-          showToast('Account created & signed in! ⭐', 'success');
-          checkAuthAndLoad();
-        } else if (data && data.user) {
-          showToast('Account created! Logging in...', 'success');
-          state.supabase.auth.signInWithPassword({ email: email, password }).then(() => {
+
+        // Instant login attempt after signup
+        state.supabase.auth.signInWithPassword({ email: authEmail, password }).then(({ data: logData, error: logErr }) => {
+          if (!logErr && logData && logData.session) {
+            showToast('Account created & signed in! ⭐', 'success');
             checkAuthAndLoad();
-          });
-        }
+          } else {
+            showToast('Account created! Signing in...', 'success');
+            checkAuthAndLoad();
+          }
+        });
       });
     } else {
-      state.supabase.auth.signInWithPassword({ email: email, password }).then(({ data, error }) => {
+      state.supabase.auth.signInWithPassword({ email: authEmail, password }).then(({ data, error }) => {
         if (error) {
           showToast(error.message, 'error');
           return;
