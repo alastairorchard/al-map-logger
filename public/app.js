@@ -392,11 +392,11 @@ function toggleAuthMode(mode) {
 function handleAuthSubmit(e) {
   e.preventDefault();
   const username = document.getElementById('auth-input-username').value.trim();
-  const *** = document.getElementById('auth-input-***').value;
+  const password = document.getElementById('auth-input-password').value;
   const email = document.getElementById('auth-input-email')?.value.trim() || '';
 
   const endpoint = state.authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
-  const payload = { username, ***, email };
+  const payload = { username, password, email };
 
   fetch(endpoint, {
     method: 'POST',
@@ -406,7 +406,7 @@ function handleAuthSubmit(e) {
     .then(r => {
       if (r.status === 404 || r.status === 405) {
         // Fallback to client-side authentication for static GitHub Pages hosting
-        return handleClientAuth(state.authMode, username, ***, email);
+        return handleClientAuth(state.authMode, username, password, email);
       }
       return r.json().then(data => ({ status: r.status, data }));
     })
@@ -428,7 +428,7 @@ function handleAuthSubmit(e) {
     })
     .catch(err => {
       // Offline fallback
-      handleClientAuth(state.authMode, username, ***, email).then(({ status, data }) => {
+      handleClientAuth(state.authMode, username, password, email).then(({ status, data }) => {
         if (status < 400) {
           state.authToken = data.token;
           state.currentUser = data.user;
@@ -445,7 +445,7 @@ function handleAuthSubmit(e) {
     });
 }
 
-function handleClientAuth(mode, username, ***, email) {
+function handleClientAuth(mode, username, password, email) {
   const users = ClientDB.getUsers();
   const cleanUsername = username.toLowerCase();
 
@@ -457,7 +457,7 @@ function handleClientAuth(mode, username, ***, email) {
       id: `usr_${Date.now()}`,
       username: cleanUsername,
       email: email || '',
-      ***: ***
+      password: password
     };
     users.push(user);
     ClientDB.saveUsers(users);
@@ -467,13 +467,13 @@ function handleClientAuth(mode, username, ***, email) {
       data: { user: { id: user.id, username: user.username, email: user.email }, token: `client_token_${user.id}` }
     });
   } else {
-    const user = users.find(u => u.username === cleanUsername && u.*** === ***);
+    const user = users.find(u => u.username === cleanUsername && u.password === password);
     if (!user) {
       // Auto-create default user if first time on GitHub Pages
       if (users.length === 0 && cleanUsername) {
-        return handleClientAuth('register', username, ***, email);
+        return handleClientAuth('register', username, password, email);
       }
-      return Promise.resolve({ status: 401, data: { error: 'Invalid username or ***.' } });
+      return Promise.resolve({ status: 401, data: { error: 'Invalid username or password.' } });
     }
     return Promise.resolve({
       status: 200,
