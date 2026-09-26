@@ -1637,64 +1637,71 @@ function editEvent(id) {
   openModal('modal-event');
 }
 
-function handlePhotoFileSelected(input) {
+function compressImageFile(file, maxWidth = 1200, quality = 0.82) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxWidth || height > maxWidth) {
+          if (width > height) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxWidth) / height);
+            height = maxWidth;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handlePhotoFileSelected(input) {
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
 
+  showToast('Processing photo...', 'info');
+  const compressedDataUrl = await compressImageFile(file);
+  if (compressedDataUrl) {
+    setPhotoPreview(compressedDataUrl);
+  }
+
   // Upload to Supabase Storage if connected
   if (state.supabase) {
-    showToast('Uploading photo to Supabase storage...', 'info');
-    const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
-    state.supabase.storage.from('photos').upload(filename, file).then(({ data, error }) => {
-      if (error) {
-        // Fallback to data URL
-        const reader = new FileReader();
-        reader.onload = (e) => setPhotoPreview(e.target.result);
-        reader.readAsDataURL(file);
-      } else {
-        const { data: publicUrlData } = state.supabase.storage.from('photos').getPublicUrl(filename);
-        setPhotoPreview(publicUrlData.publicUrl);
-        showToast('Photo uploaded to Cloud storage!', 'success');
-      }
-    });
-    return;
+    try {
+      const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+      state.supabase.storage.from('photos').upload(filename, file, { upsert: true }).then(({ data, error }) => {
+        if (!error) {
+          const { data: publicUrlData } = state.supabase.storage.from('photos').getPublicUrl(filename);
+          if (publicUrlData && publicUrlData.publicUrl) {
+            setPhotoPreview(publicUrlData.publicUrl);
+            showToast('Photo uploaded to Cloud Storage! 📸', 'success');
+          }
+        } else {
+          showToast('Photo attached & ready to save! 📸', 'success');
+        }
+      }).catch(() => {
+        showToast('Photo attached & ready to save! 📸', 'success');
+      });
+    } catch (e) {
+      showToast('Photo attached & ready to save! 📸', 'success');
+    }
+  } else {
+    showToast('Photo attached & ready to save! 📸', 'success');
   }
-
-  if (state.isStandaloneClient || location.hostname.includes('github.io')) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPhotoPreview(e.target.result);
-      showToast('Photo attached!', 'success');
-    };
-    reader.readAsDataURL(file);
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('photo', file);
-
-  showToast('Uploading photo...', 'info');
-
-  fetchWithAuth('/api/upload', {
-    method: 'POST',
-    body: formData
-  })
-    .then(r => r.json())
-    .then(data => {
-      if (data.url) {
-        setPhotoPreview(data.url);
-        showToast('Photo uploaded successfully!', 'success');
-      } else {
-        const reader = new FileReader();
-        reader.onload = (e) => setPhotoPreview(e.target.result);
-        reader.readAsDataURL(file);
-      }
-    })
-    .catch(() => {
-      const reader = new FileReader();
-      reader.onload = (e) => setPhotoPreview(e.target.result);
-      reader.readAsDataURL(file);
-    });
 }
 
 function handlePhotoUrlInput(val) {
