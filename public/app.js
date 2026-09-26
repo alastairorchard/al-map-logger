@@ -1,5 +1,8 @@
 // AL - Map & Event Logger (Multi-User, Supabase Cloud Sync & Local Isolation)
 
+const DEFAULT_SUPABASE_URL = 'https://bfwlzobdpbuippfbbjud.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_PcDpOFZptvEbE0wL8qDyLA_uqqkkf0A';
+
 // State Management
 let state = {
   activeTab: 'map',
@@ -19,8 +22,8 @@ let state = {
   },
   supabase: null,
   cloudConfig: {
-    url: localStorage.getItem('al_supabase_url') || '',
-    key: localStorage.getItem('al_supabase_key') || ''
+    url: localStorage.getItem('al_supabase_url') || DEFAULT_SUPABASE_URL,
+    key: localStorage.getItem('al_supabase_key') || DEFAULT_SUPABASE_KEY
   }
 };
 
