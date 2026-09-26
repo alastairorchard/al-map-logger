@@ -1211,9 +1211,7 @@ function loadAllData() {
         };
       });
 
-      state.kpis = ClientDB.computeKPIs(state.currentUser.id);
-      state.kpis.total_events = state.events.length;
-      state.kpis.total_locations = state.locations.length;
+      state.kpis = computeKPIsFromState(state.locations, state.events);
 
       updateLocationSelectOptions();
       renderMapMarkers();
@@ -1390,12 +1388,82 @@ function renderEventsTable(events) {
 // ==========================================
 // KPIS & CHARTS LOGIC
 // ==========================================
-function loadKPIs() {
-  if (!state.currentUser) return;
+function computeKPIsFromState(locs = [], evts = []) {
+  const totalEvents = evts.length;
+  const totalLocations = locs.length;
+  const totalFavorites = evts.filter(e => e.favorite === 1 || e.favorite === true).length;
+  
+  const avgScoreOverall = totalEvents > 0
+    ? evts.reduce((sum, e) => sum + (parseFloat(e.score) || 0), 0) / totalEvents
+    : 0;
 
-  state.kpis = ClientDB.computeKPIs(state.currentUser.id);
-  state.kpis.total_events = state.events.length;
-  state.kpis.total_locations = state.locations.length;
+  const eventsPerLocation = totalLocations > 0 ? totalEvents / totalLocations : 0;
+
+  // Calculate per-location stats from live in-memory state
+  const locStats = locs.map(l => {
+    const locEvts = evts.filter(e => e.location_id === l.id);
+    const avg = locEvts.length > 0
+      ? locEvts.reduce((sum, e) => sum + (parseFloat(e.score) || 0), 0) / locEvts.length
+      : 0;
+    return {
+      ...l,
+      event_count: locEvts.length,
+      avg_score: avg,
+      latest_event_date: locEvts.length > 0 ? locEvts[0].date : null
+    };
+  });
+
+  // Favorite location by score (highest average score with at least 1 event)
+  const withEvents = locStats.filter(l => l.event_count >= 1);
+  withEvents.sort((a, b) => b.avg_score - a.avg_score || b.event_count - a.event_count);
+  const favoriteByScore = withEvents.length > 0 ? withEvents[0] : null;
+
+  // Most frequented location (highest event count)
+  const byFreq = [...locStats].sort((a, b) => b.event_count - a.event_count || b.avg_score - a.avg_score);
+  const mostFrequented = byFreq.length > 0 && byFreq[0].event_count > 0 ? byFreq[0] : null;
+
+  // Category breakdown
+  const catMap = {};
+  locStats.forEach(l => {
+    const cat = l.category || 'Other';
+    if (!catMap[cat]) catMap[cat] = { category: cat, location_count: 0, event_count: 0, total_score: 0 };
+    catMap[cat].location_count += 1;
+    catMap[cat].event_count += l.event_count;
+    catMap[cat].total_score += l.avg_score * l.event_count;
+  });
+
+  const categoryBreakdown = Object.values(catMap).map(c => ({
+    category: c.category,
+    location_count: c.location_count,
+    event_count: c.event_count,
+    avg_score: c.event_count > 0 ? c.total_score / c.event_count : 0
+  })).sort((a, b) => b.event_count - a.event_count);
+
+  // Score distribution
+  const scoreDistribution = [
+    { range: '9.0 - 10.0', count: evts.filter(e => parseFloat(e.score) >= 9.0).length },
+    { range: '7.0 - 8.9', count: evts.filter(e => parseFloat(e.score) >= 7.0 && parseFloat(e.score) < 9.0).length },
+    { range: '5.0 - 6.9', count: evts.filter(e => parseFloat(e.score) >= 5.0 && parseFloat(e.score) < 7.0).length },
+    { range: '3.0 - 4.9', count: evts.filter(e => parseFloat(e.score) >= 3.0 && parseFloat(e.score) < 5.0).length },
+    { range: '1.0 - 2.9', count: evts.filter(e => parseFloat(e.score) < 3.0).length }
+  ];
+
+  return {
+    total_events: totalEvents,
+    total_locations: totalLocations,
+    total_favorites: totalFavorites,
+    average_score_overall: avgScoreOverall,
+    events_per_location: eventsPerLocation,
+    favorite_location_by_score: favoriteByScore,
+    most_frequented_location: mostFrequented,
+    top_locations: withEvents.slice(0, 5),
+    category_breakdown: categoryBreakdown,
+    score_distribution: scoreDistribution
+  };
+}
+
+function loadKPIs() {
+  state.kpis = computeKPIsFromState(state.locations, state.events);
   renderKPIDashboard(state.kpis);
 }
 
