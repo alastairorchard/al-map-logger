@@ -56,7 +56,10 @@
   <!-- Lucide Icons (Local) -->
   <script src="./vendor/lucide.min.js"></script>
 
-  <link rel="stylesheet" href="./styles.css?v=8">
+  <!-- Supabase Cloud Client (Local) -->
+  <script src="./vendor/supabase.js"></script>
+
+  <link rel="stylesheet" href="./styles.css?v=10">
 </head>
 <body class="bg-dark-900 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -97,6 +100,11 @@
 
       <!-- USER PROFILE & TOP ACTIONS -->
       <div class="flex items-center gap-2">
+        <button onclick="openCloudConfigModal()" id="cloud-status-badge" class="px-2.5 py-1.5 rounded-xl bg-dark-700/80 hover:bg-dark-600 text-slate-300 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition" title="Cloud Sync Settings">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" id="cloud-status-dot"></span>
+          <span class="hidden sm:inline" id="cloud-status-text">Cloud Sync</span>
+        </button>
+
         <button onclick="openAddLocationModal()" class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium bg-dark-700 hover:bg-dark-600 text-slate-200 border border-slate-700 transition">
           <i data-lucide="map-pin" class="w-4 h-4 text-accent-400"></i>
           <span>+ Location</span>
@@ -521,6 +529,61 @@
   <!-- MODALS -->
   <!-- ============================================================== -->
 
+  <!-- MODAL: CLOUD SYNC CONFIGURATION -->
+  <div id="modal-cloud-config" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-dark-800 border border-slate-700 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-700 mb-5">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30 font-bold">
+            <i data-lucide="cloud" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold text-white">Cross-Device Cloud Sync</h3>
+            <p class="text-xs text-slate-400">Sync your locations & logs across all your phones & laptops.</p>
+          </div>
+        </div>
+        <button onclick="closeModal('modal-cloud-config')" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-cloud-config" onsubmit="handleCloudConfigSubmit(event)" class="space-y-4">
+        <div class="p-3.5 bg-dark-900/80 rounded-2xl border border-slate-700 text-xs text-slate-300 space-y-2">
+          <div class="flex items-center gap-2 font-bold text-white">
+            <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i> Free Supabase Cloud Database:
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            Create a free project at <a href="https://supabase.com" target="_blank" class="text-accent-400 underline">supabase.com</a>, run the SQL script in <code class="text-brand-300">supabase_schema.sql</code>, and paste your Project URL & Anon Key below to enable real-time cloud sync across every device!
+          </p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Supabase Project URL</label>
+          <input type="url" id="cloud-input-url" placeholder="https://xyzproject.supabase.co" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Supabase Anon Public Key</label>
+          <input type="text" id="cloud-input-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+        </div>
+
+        <div class="flex items-center justify-between pt-3 border-t border-slate-700">
+          <button type="button" onclick="disconnectCloudSync()" class="text-xs text-red-400 hover:text-red-300 font-medium">
+            Reset to Local Mode
+          </button>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="closeModal('modal-cloud-config')" class="px-4 py-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-300 text-xs font-medium transition">
+              Cancel
+            </button>
+            <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/30 transition">
+              Save & Connect Cloud
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- MODAL: AUTHENTICATION (LOGIN & REGISTER) -->
   <div id="modal-auth" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 overflow-y-auto">
     <div class="bg-dark-800 border border-slate-700 rounded-3xl w-full max-w-md shadow-2xl p-6 relative">
@@ -544,10 +607,10 @@
 
       <form id="form-auth" onsubmit="handleAuthSubmit(event)" class="space-y-4">
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Username *</label>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Username / Email *</label>
           <div class="relative">
             <i data-lucide="user" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
-            <input type="text" id="auth-input-username" required placeholder="your username" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+            <input type="text" id="auth-input-username" required placeholder="your username or email" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
           </div>
         </div>
 
@@ -851,6 +914,6 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <script src="./app.js?v=9"></script>
+  <script src="./app.js?v=11"></script>
 </body>
 </html>

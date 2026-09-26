@@ -1,11 +1,11 @@
-// AL - Map & Event Logger (Multi-User, Strict Data Segregation & Change Password)
+// AL - Map & Event Logger (Multi-User, Supabase Cloud Sync & Local Isolation)
 
 // State Management
 let state = {
   activeTab: 'map',
   currentUser: null,
   authToken: localStorage.getItem('al_auth_token') || null,
-  authMode: 'login', // 'login' or 'register'
+  authMode: 'login',
   locations: [],
   events: [],
   kpis: null,
@@ -17,7 +17,11 @@ let state = {
     scoreDist: null,
     category: null
   },
-  isStandaloneClient: false
+  supabase: null,
+  cloudConfig: {
+    url: localStorage.getItem('al_supabase_url') || '',
+    key: localStorage.getItem('al_supabase_key') || ''
+  }
 };
 
 let map = null;
@@ -28,6 +32,7 @@ let searchDebounceTimer = null;
 document.addEventListener('DOMContentLoaded', () => {
   initIcons();
   initMap();
+  initCloudClient();
   checkAuthAndLoad();
   setDefaultEventDate();
 });
@@ -36,6 +41,77 @@ function initIcons() {
   if (window.lucide) {
     window.lucide.createIcons();
   }
+}
+
+// ==========================================
+// SUPABASE CLOUD SYNC INITIALIZATION
+// ==========================================
+function initCloudClient() {
+  if (state.cloudConfig.url && state.cloudConfig.key && window.supabase) {
+    try {
+      state.supabase = window.supabase.createClient(state.cloudConfig.url, state.cloudConfig.key);
+      updateCloudStatusUI(true);
+    } catch (e) {
+      console.warn('Supabase initialization failed:', e);
+      state.supabase = null;
+      updateCloudStatusUI(false);
+    }
+  } else {
+    state.supabase = null;
+    updateCloudStatusUI(false);
+  }
+}
+
+function updateCloudStatusUI(connected) {
+  const dot = document.getElementById('cloud-status-dot');
+  const text = document.getElementById('cloud-status-text');
+  if (dot && text) {
+    if (connected) {
+      dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+      text.innerText = 'Cloud Sync: Active';
+    } else {
+      dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+      text.innerText = 'Connect Cloud';
+    }
+  }
+}
+
+function openCloudConfigModal() {
+  document.getElementById('cloud-input-url').value = state.cloudConfig.url;
+  document.getElementById('cloud-input-key').value = state.cloudConfig.key;
+  openModal('modal-cloud-config');
+}
+
+function handleCloudConfigSubmit(e) {
+  e.preventDefault();
+  const url = document.getElementById('cloud-input-url').value.trim();
+  const key = document.getElementById('cloud-input-key').value.trim();
+
+  if (!url || !key) {
+    showToast('Please enter both Project URL and Anon Key', 'error');
+    return;
+  }
+
+  localStorage.setItem('al_supabase_url', url);
+  localStorage.setItem('al_supabase_key', key);
+  state.cloudConfig = { url, key };
+
+  initCloudClient();
+  closeModal('modal-cloud-config');
+  showToast('Cloud database connected! ⭐', 'success');
+  logout(false);
+  openAuthModal('login');
+}
+
+function disconnectCloudSync() {
+  localStorage.removeItem('al_supabase_url');
+  localStorage.removeItem('al_supabase_key');
+  state.cloudConfig = { url: '', key: '' };
+  state.supabase = null;
+  updateCloudStatusUI(false);
+  closeModal('modal-cloud-config');
+  showToast('Reset to local mode', 'info');
+  logout(false);
 }
 
 // ==========================================
@@ -162,6 +238,26 @@ const ClientDB = {
 // AUTHENTICATION CLIENT LOGIC
 // ==========================================
 function checkAuthAndLoad() {
+  if (state.supabase) {
+    state.supabase.auth.getSession().then(({ data, error }) => {
+      if (data && data.session && data.session.user) {
+        state.currentUser = {
+          id: data.session.user.id,
+          username: data.session.user.email?.split('@')[0] || 'User',
+          email: data.session.user.email
+        };
+        state.authToken = data.session.access_token;
+        renderUserHeader();
+        closeModal('modal-auth');
+        loadAllData();
+      } else {
+        renderUserHeader();
+        openAuthModal('login');
+      }
+    });
+    return;
+  }
+
   if (!state.authToken) {
     renderUserHeader();
     openAuthModal('login');
@@ -172,7 +268,6 @@ function checkAuthAndLoad() {
     .then(res => {
       if (!res.ok) {
         if (res.status === 404 || res.status === 405) {
-          state.isStandaloneClient = true;
           return loadClientSession();
         }
         throw new Error('Session expired');
@@ -280,7 +375,7 @@ function toggleAuthMode(mode) {
     ? 'flex-1 py-2 text-xs font-bold rounded-lg transition bg-brand-600 text-white shadow'
     : 'flex-1 py-2 text-xs font-bold rounded-lg transition text-slate-400 hover:text-white';
 
-  document.getElementById('auth-email-group').classList.toggle('hidden', !isReg);
+  document.getElementById('auth-email-group').classList.toggle('hidden', !isReg && !state.supabase);
   document.getElementById('auth-submit-btn').innerText = isReg ? 'Create Account' : 'Sign In';
 }
 
@@ -290,6 +385,32 @@ function handleAuthSubmit(e) {
   const password = document.getElementById('auth-input-password').value;
   const email = document.getElementById('auth-input-email')?.value.trim() || '';
 
+  // 1. If Supabase Cloud Client is connected, authenticate through Supabase
+  if (state.supabase) {
+    const authEmail = email || (username.includes('@') ? username : `${username}@al-app.local`);
+    if (state.authMode === 'register') {
+      state.supabase.auth.signUp({ email: authEmail, password }).then(({ data, error }) => {
+        if (error) {
+          showToast(error.message, 'error');
+          return;
+        }
+        showToast('Account created! Logging in...', 'success');
+        checkAuthAndLoad();
+      });
+    } else {
+      state.supabase.auth.signInWithPassword({ email: authEmail, password }).then(({ data, error }) => {
+        if (error) {
+          showToast(error.message, 'error');
+          return;
+        }
+        showToast('Signed in successfully! ⭐', 'success');
+        checkAuthAndLoad();
+      });
+    }
+    return;
+  }
+
+  // 2. Otherwise use local server or client auth
   const endpoint = state.authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
   const payload = { username, password, email };
 
@@ -354,7 +475,6 @@ function handleClientAuth(mode, username, password, email) {
     };
     users.push(user);
     ClientDB.saveUsers(users);
-    // New user starts with clean private state
     ClientDB.saveLocations([], user.id);
     ClientDB.saveEvents([], user.id);
 
@@ -399,6 +519,18 @@ function handleChangePasswordSubmit(e) {
     return;
   }
 
+  if (state.supabase) {
+    state.supabase.auth.updateUser({ password: newPassword }).then(({ data, error }) => {
+      if (error) {
+        showToast(error.message, 'error');
+      } else {
+        closeModal('modal-password');
+        showToast('Password updated in Supabase cloud! 🔒', 'success');
+      }
+    });
+    return;
+  }
+
   fetchWithAuth('/api/auth/change-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -431,6 +563,10 @@ function handleChangePasswordSubmit(e) {
 }
 
 function logout(notify = true) {
+  if (state.supabase) {
+    state.supabase.auth.signOut();
+  }
+
   state.authToken = null;
   state.currentUser = null;
   state.locations = [];
@@ -513,7 +649,6 @@ function initMap() {
   try {
     map = L.map('leaflet-map').setView(defaultCenter, defaultZoom);
 
-    // Standard OpenStreetMap tiles (100% reliable, zero API key)
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
@@ -701,7 +836,11 @@ function openLocationDrawer(loc) {
     addEvtBtn.onclick = () => openAddEventModal(loc.id);
   }
 
-  if (state.isStandaloneClient) {
+  if (state.supabase) {
+    state.supabase.from('events').select('*').eq('location_id', loc.id).order('date', { ascending: false }).then(({ data, error }) => {
+      renderDrawerEventsList(data || []);
+    });
+  } else if (state.isStandaloneClient) {
     const evts = state.events.filter(e => e.location_id === loc.id);
     renderDrawerEventsList(evts);
   } else {
@@ -825,7 +964,47 @@ function renderLocationCarousel() {
 // DATA LOADING (Locations, Events, KPIs)
 // ==========================================
 function loadAllData() {
-  if (!state.authToken || !state.currentUser) return;
+  if (!state.currentUser) return;
+
+  // If Supabase is active, query Supabase cloud tables
+  if (state.supabase) {
+    Promise.all([
+      state.supabase.from('locations').select('*').order('created_at', { ascending: false }),
+      state.supabase.from('events').select('*').order('date', { ascending: false })
+    ]).then(([locRes, evtRes]) => {
+      const rawLocs = locRes.data || [];
+      const rawEvts = evtRes.data || [];
+
+      state.events = rawEvts.map(e => {
+        const loc = rawLocs.find(l => l.id === e.location_id);
+        return { ...e, location_name: loc ? loc.name : 'Unknown' };
+      });
+
+      state.locations = rawLocs.map(l => {
+        const locEvts = rawEvts.filter(e => e.location_id === l.id);
+        const avg = locEvts.length > 0
+          ? locEvts.reduce((sum, e) => sum + (parseFloat(e.score) || 0), 0) / locEvts.length
+          : 0;
+        return {
+          ...l,
+          event_count: locEvts.length,
+          avg_score: avg,
+          latest_event_date: locEvts.length > 0 ? locEvts[0].date : null
+        };
+      });
+
+      state.kpis = ClientDB.computeKPIs(state.currentUser.id);
+      state.kpis.total_events = state.events.length;
+      state.kpis.total_locations = state.locations.length;
+
+      updateLocationSelectOptions();
+      renderMapMarkers();
+      renderLocationCarousel();
+      loadEventsTable();
+      loadKPIs();
+    });
+    return;
+  }
 
   Promise.all([
     fetchWithAuth('/api/locations').then(r => r.json()),
@@ -910,7 +1089,7 @@ function debounceLoadEvents() {
 }
 
 function loadEventsTable() {
-  if (!state.authToken) return;
+  if (!state.currentUser) return;
 
   const search = (document.getElementById('events-search-filter')?.value || '').trim().toLowerCase();
   const locationId = document.getElementById('events-location-filter')?.value || '';
@@ -921,33 +1100,6 @@ function loadEventsTable() {
   if (!sort) sort = 'date';
   if (!order) order = 'desc';
 
-  if (state.isStandaloneClient) {
-    loadEventsTableClientFallback(search, locationId, minScore, sort, order);
-    return;
-  }
-
-  const params = new URLSearchParams();
-  if (search) params.append('search', search);
-  if (locationId) params.append('location_id', locationId);
-  if (minScore) params.append('min_score', minScore);
-  params.append('sort', sort);
-  params.append('order', order);
-
-  fetchWithAuth(`/api/events?${params.toString()}`)
-    .then(r => r.json())
-    .then(events => {
-      if (Array.isArray(events)) {
-        renderEventsTable(events);
-      } else {
-        loadEventsTableClientFallback(search, locationId, minScore, sort, order);
-      }
-    })
-    .catch(() => {
-      loadEventsTableClientFallback(search, locationId, minScore, sort, order);
-    });
-}
-
-function loadEventsTableClientFallback(search, locationId, minScore, sort, order) {
   let filtered = [...state.events];
   if (locationId) filtered = filtered.filter(e => e.location_id === locationId);
   if (minScore) filtered = filtered.filter(e => e.score >= parseFloat(minScore));
@@ -1042,10 +1194,12 @@ function renderEventsTable(events) {
 // KPIS & CHARTS LOGIC
 // ==========================================
 function loadKPIs() {
-  if (!state.authToken) return;
+  if (!state.currentUser) return;
 
-  if (state.isStandaloneClient) {
+  if (state.supabase || state.isStandaloneClient) {
     state.kpis = ClientDB.computeKPIs(state.currentUser.id);
+    state.kpis.total_events = state.events.length;
+    state.kpis.total_locations = state.locations.length;
     renderKPIDashboard(state.kpis);
     return;
   }
@@ -1223,28 +1377,10 @@ function renderCategoryChart(categories) {
 // FAVORITES VIEW
 // ==========================================
 function loadFavoritesGrid() {
-  if (!state.authToken) return;
+  if (!state.currentUser) return;
 
-  if (state.isStandaloneClient) {
-    const favs = state.events.filter(e => e.favorite === 1 || e.favorite === true);
-    renderFavoritesGrid(favs);
-    return;
-  }
-
-  fetchWithAuth('/api/events?favorite=1&sort=score&order=desc')
-    .then(r => r.json())
-    .then(favs => {
-      if (Array.isArray(favs)) {
-        renderFavoritesGrid(favs);
-      } else {
-        const f = state.events.filter(e => e.favorite === 1 || e.favorite === true);
-        renderFavoritesGrid(f);
-      }
-    })
-    .catch(() => {
-      const f = state.events.filter(e => e.favorite === 1 || e.favorite === true);
-      renderFavoritesGrid(f);
-    });
+  const favs = state.events.filter(e => e.favorite === 1 || e.favorite === true);
+  renderFavoritesGrid(favs);
 }
 
 function renderFavoritesGrid(events) {
@@ -1321,7 +1457,7 @@ function closeModal(id) {
 }
 
 function openAddLocationModal(lat = null, lng = null) {
-  if (!state.authToken) {
+  if (!state.currentUser) {
     openAuthModal('login');
     return;
   }
@@ -1355,6 +1491,22 @@ function handleLocationSubmit(e) {
   const notes = document.getElementById('loc-input-notes').value;
 
   const payload = { name, category, lat, lng, address, notes };
+
+  if (state.supabase) {
+    const locId = id || `loc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    state.supabase.from('locations').upsert({ id: locId, ...payload, user_id: state.currentUser.id }).then(({ data, error }) => {
+      if (error) {
+        showToast(error.message, 'error');
+      } else {
+        closeModal('modal-location');
+        showToast('Location saved to Cloud! ⭐', 'success');
+        loadAllData();
+        if (map && !id) map.flyTo([lat, lng], 14);
+      }
+    });
+    return;
+  }
+
   const method = id ? 'PUT' : 'POST';
   const url = id ? `/api/locations/${id}` : '/api/locations';
 
@@ -1371,11 +1523,9 @@ function handleLocationSubmit(e) {
     })
     .then(() => {
       closeModal('modal-location');
-      showToast(id ? 'Location updated successfully' : 'Location created successfully!', 'success');
+      showToast(id ? 'Location updated!' : 'Location created!', 'success');
       loadAllData();
-      if (map && !id) {
-        map.flyTo([lat, lng], 14);
-      }
+      if (map && !id) map.flyTo([lat, lng], 14);
     })
     .catch(() => {
       handleClientLocationSave(id, payload).then(() => {
@@ -1429,7 +1579,7 @@ function setDefaultEventDate() {
 }
 
 function openAddEventModal(locationId = null) {
-  if (!state.authToken) {
+  if (!state.currentUser) {
     openAuthModal('login');
     return;
   }
@@ -1477,6 +1627,25 @@ function editEvent(id) {
 function handlePhotoFileSelected(input) {
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
+
+  // Upload to Supabase Storage if connected
+  if (state.supabase) {
+    showToast('Uploading photo to Supabase storage...', 'info');
+    const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+    state.supabase.storage.from('photos').upload(filename, file).then(({ data, error }) => {
+      if (error) {
+        // Fallback to data URL
+        const reader = new FileReader();
+        reader.onload = (e) => setPhotoPreview(e.target.result);
+        reader.readAsDataURL(file);
+      } else {
+        const { data: publicUrlData } = state.supabase.storage.from('photos').getPublicUrl(filename);
+        setPhotoPreview(publicUrlData.publicUrl);
+        showToast('Photo uploaded to Cloud storage!', 'success');
+      }
+    });
+    return;
+  }
 
   if (state.isStandaloneClient || location.hostname.includes('github.io')) {
     const reader = new FileReader();
@@ -1555,6 +1724,24 @@ function handleEventSubmit(e) {
   const favorite = document.getElementById('evt-input-favorite').checked ? 1 : 0;
 
   const payload = { location_id, name, date, score, description, photo_url, favorite };
+
+  if (state.supabase) {
+    const evtId = id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    state.supabase.from('events').upsert({ id: evtId, ...payload, user_id: state.currentUser.id }).then(({ data, error }) => {
+      if (error) {
+        showToast(error.message, 'error');
+      } else {
+        closeModal('modal-event');
+        showToast('Event saved to Cloud! ⭐', 'success');
+        loadAllData();
+        if (state.selectedLocation && state.selectedLocation.id === location_id) {
+          openLocationDrawer(state.selectedLocation);
+        }
+      }
+    });
+    return;
+  }
+
   const method = id ? 'PUT' : 'POST';
   const url = id ? `/api/events/${id}` : '/api/events';
 
@@ -1607,6 +1794,18 @@ function handleClientEventSave(id, payload) {
 
 function toggleFavorite(id, e) {
   if (e) e.stopPropagation();
+
+  if (state.supabase) {
+    const evt = state.events.find(x => x.id === id);
+    if (!evt) return;
+    const newFav = evt.favorite === 1 ? 0 : 1;
+    state.supabase.from('events').update({ favorite: newFav }).eq('id', id).then(() => {
+      showToast(newFav ? 'Added to favorites! ⭐' : 'Removed from favorites', 'info');
+      loadAllData();
+    });
+    return;
+  }
+
   fetchWithAuth(`/api/events/${id}/favorite`, { method: 'POST' })
     .then(r => {
       if (r.status === 404 || r.status === 405) {
@@ -1643,6 +1842,15 @@ function toggleClientFavorite(id) {
 
 function deleteEvent(id) {
   if (!confirm('Are you sure you want to delete this event?')) return;
+
+  if (state.supabase) {
+    state.supabase.from('events').delete().eq('id', id).then(() => {
+      showToast('Event deleted from Cloud', 'info');
+      loadAllData();
+    });
+    return;
+  }
+
   fetchWithAuth(`/api/events/${id}`, { method: 'DELETE' })
     .then(r => {
       if (r.status === 404 || r.status === 405) {
