@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AL - Map & Event Logger</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f5f3ff',
+              100: '#ede9fe',
+              200: '#ddd6fe',
+              300: '#c4b5fd',
+              400: '#a78bfa',
+              500: '#8b5cf6',
+              600: '#7c3aed',
+              700: '#6d28d9',
+              800: '#5b21b6',
+              900: '#4c1d95',
+              950: '#2e1065',
+            },
+            accent: {
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+            },
+            dark: {
+              900: '#090b10',
+              800: '#111622',
+              700: '#1a2234',
+              600: '#242f46',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Leaflet Map CSS & JS (Local) -->
+  <link rel="stylesheet" href="/vendor/leaflet.css">
+  <script src="/vendor/leaflet.js"></script>
+
+  <!-- Chart.js for KPIs (Local) -->
+  <script src="/vendor/chart.umd.js"></script>
+
+  <!-- Lucide Icons (Local) -->
+  <script src="/vendor/lucide.min.js"></script>
+
+  <link rel="stylesheet" href="/styles.css?v=4">
+</head>
+<body class="bg-dark-900 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- TOP APP HEADER -->
+  <header class="sticky top-0 z-40 bg-dark-800/90 backdrop-blur-md border-b border-slate-800 px-4 lg:px-8 py-3 transition-all">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      
+      <!-- LOGO & BRAND -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 via-brand-500 to-accent-500 flex items-center justify-center shadow-lg shadow-brand-500/25 ring-1 ring-white/20 font-black text-xl tracking-wider text-white cursor-pointer" onclick="switchTab('map')">
+          AL
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-lg leading-tight tracking-tight text-white flex items-center gap-1.5 cursor-pointer" onclick="switchTab('map')">
+              AL <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-medium border border-brand-500/30">Map Logger</span>
+            </h1>
+          </div>
+          <p class="text-xs text-slate-400 hidden sm:block">Private spots, scored events & visual maps</p>
+        </div>
+      </div>
+
+      <!-- DESKTOP NAV TABS -->
+      <nav class="hidden md:flex items-center gap-1 bg-dark-900/80 p-1.5 rounded-xl border border-slate-800">
+        <button onclick="switchTab('map')" id="nav-btn-map" class="nav-tab active flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-white bg-brand-600 shadow">
+          <i data-lucide="map" class="w-4 h-4"></i> Map
+        </button>
+        <button onclick="switchTab('events')" id="nav-btn-events" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
+          <i data-lucide="list" class="w-4 h-4"></i> Events Table
+        </button>
+        <button onclick="switchTab('kpis')" id="nav-btn-kpis" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
+          <i data-lucide="bar-chart-3" class="w-4 h-4"></i> KPIs & Stats
+        </button>
+        <button onclick="switchTab('favorites')" id="nav-btn-favorites" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
+          <i data-lucide="star" class="w-4 h-4 text-amber-400"></i> Favorites
+        </button>
+      </nav>
+
+      <!-- USER PROFILE & TOP ACTIONS -->
+      <div class="flex items-center gap-2">
+        <button onclick="openAddLocationModal()" class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium bg-dark-700 hover:bg-dark-600 text-slate-200 border border-slate-700 transition">
+          <i data-lucide="map-pin" class="w-4 h-4 text-accent-400"></i>
+          <span>+ Location</span>
+        </button>
+
+        <button onclick="openAddEventModal()" class="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 text-white shadow-lg shadow-brand-600/30 transition active:scale-95">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>Log Event</span>
+        </button>
+
+        <!-- USER BADGE / SIGN IN BUTTON -->
+        <div id="user-header-container" class="ml-2 pl-2 border-l border-slate-700/80 flex items-center gap-2">
+          <!-- Populated via JS -->
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN APP CONTAINER -->
+  <main class="flex-1 flex flex-col relative overflow-x-hidden pb-20 md:pb-6">
+
+    <!-- 1. MAP VIEW TAB -->
+    <section id="tab-map" class="tab-content flex-1 flex flex-col relative w-full h-[calc(100vh-65px)]">
+      
+      <!-- MAP CONTROLS & SEARCH BAR OVERLAY -->
+      <div class="absolute top-4 left-4 right-4 z-20 flex flex-wrap gap-2 pointer-events-none">
+        <div class="bg-dark-800/90 backdrop-blur-md p-2 rounded-2xl border border-slate-700 shadow-xl pointer-events-auto flex items-center gap-2 flex-1 max-w-md">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 ml-2"></i>
+          <input type="text" id="map-search-input" placeholder="Search my spots, events, or categories..." class="w-full bg-transparent text-sm text-white placeholder-slate-400 focus:outline-none" oninput="handleMapSearch(this.value)">
+          <button id="map-clear-search" onclick="clearMapSearch()" class="text-slate-400 hover:text-white p-1 hidden">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <div class="bg-dark-800/90 backdrop-blur-md p-1.5 rounded-2xl border border-slate-700 shadow-xl pointer-events-auto flex items-center gap-1">
+          <button onclick="filterMapCategory('all')" class="cat-pill active text-xs px-3 py-1.5 rounded-xl font-medium transition bg-brand-600 text-white">All</button>
+          <button onclick="filterMapCategory('Nature & Coast')" class="cat-pill text-xs px-3 py-1.5 rounded-xl font-medium transition text-slate-300 hover:bg-dark-700">Coast</button>
+          <button onclick="filterMapCategory('Restaurant & Dining')" class="cat-pill text-xs px-3 py-1.5 rounded-xl font-medium transition text-slate-300 hover:bg-dark-700">Dining</button>
+          <button onclick="filterMapCategory('Culture & Landmark')" class="cat-pill text-xs px-3 py-1.5 rounded-xl font-medium transition text-slate-300 hover:bg-dark-700">Landmarks</button>
+          <button onclick="locateUserPosition()" title="Center on my location" class="p-1.5 hover:bg-dark-700 rounded-xl text-accent-400 transition">
+            <i data-lucide="crosshair" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- THE MAP CANVAS -->
+      <div id="leaflet-map" class="w-full h-full z-10 flex-1"></div>
+
+      <!-- FLOATING LOCATION QUICK-SELECTOR CAROUSEL (BOTTOM OVERLAY) -->
+      <div class="absolute bottom-20 md:bottom-4 left-4 right-4 z-20 pointer-events-none">
+        <div class="max-w-4xl mx-auto flex items-center gap-2 overflow-x-auto custom-scrollbar py-2 pointer-events-auto" id="map-locations-carousel">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+      <!-- MAP LOCATION DETAILS SLIDEOVER DRAWER -->
+      <div id="location-drawer" class="absolute bottom-4 left-4 right-4 md:left-auto md:right-4 md:top-4 md:bottom-4 md:w-96 z-30 bg-dark-800/95 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl p-4 flex flex-col transition-all duration-300 transform translate-y-full md:translate-y-0 md:translate-x-[120%] overflow-hidden max-h-[80vh] md:max-h-full">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-700">
+          <div class="flex items-center gap-2">
+            <span id="drawer-category-badge" class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30">Category</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="closeLocationDrawer()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-dark-700 transition">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="py-3 overflow-y-auto flex-1 custom-scrollbar pr-1">
+          <h2 id="drawer-title" class="text-xl font-bold text-white mb-1">Location Name</h2>
+          <p id="drawer-address" class="text-xs text-slate-400 flex items-center gap-1 mb-2">
+            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-accent-400 shrink-0"></i>
+            <span class="truncate">Address</span>
+          </p>
+          <p id="drawer-notes" class="text-xs text-slate-300 mb-4 bg-dark-900/60 p-2.5 rounded-xl border border-slate-800 italic">Notes</p>
+
+          <!-- LOCATION STATS ROW -->
+          <div class="grid grid-cols-2 gap-2 mb-4">
+            <div class="bg-dark-700/50 p-2.5 rounded-xl border border-slate-700/60 flex items-center justify-between">
+              <span class="text-xs text-slate-400">Avg Score</span>
+              <span id="drawer-avg-score" class="font-bold text-sm text-amber-400 flex items-center gap-1">
+                <i data-lucide="star" class="w-3.5 h-3.5 fill-amber-400"></i> 0.0
+              </span>
+            </div>
+            <div class="bg-dark-700/50 p-2.5 rounded-xl border border-slate-700/60 flex items-center justify-between">
+              <span class="text-xs text-slate-400">Total Events</span>
+              <span id="drawer-event-count" class="font-bold text-sm text-brand-300">0</span>
+            </div>
+          </div>
+
+          <!-- EVENTS TIMELINE IN THIS LOCATION -->
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Events at this spot</h3>
+            <button id="drawer-add-event-btn" class="text-xs text-brand-400 hover:text-brand-300 font-medium flex items-center gap-1">
+              <i data-lucide="plus" class="w-3 h-3"></i> Add Event
+            </button>
+          </div>
+
+          <div id="drawer-events-list" class="space-y-3">
+            <!-- Populated via JavaScript -->
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 2. EVENTS TABLE TAB -->
+    <section id="tab-events" class="tab-content hidden max-w-7xl mx-auto w-full px-4 lg:px-8 py-6 flex-1 flex flex-col">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            <span>All Events & Logs</span>
+            <span id="events-total-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30">0 events</span>
+          </h2>
+          <p class="text-sm text-slate-400">Full personal timeline of experiences, scores, and photos across your logged spots.</p>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <button onclick="exportDataJSON()" class="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-300 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Export JSON
+          </button>
+          <button onclick="exportEventsCSV()" class="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-300 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
+            <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Export CSV
+          </button>
+          <button onclick="openAddEventModal()" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold shadow-lg shadow-brand-600/30 flex items-center gap-1.5 transition">
+            <i data-lucide="plus" class="w-4 h-4"></i> New Event
+          </button>
+        </div>
+      </div>
+
+      <!-- FILTER & SEARCH TOOLBAR -->
+      <div class="bg-dark-800 p-4 rounded-2xl border border-slate-800 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shadow-lg">
+        <div class="relative">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+          <input type="text" id="events-search-filter" placeholder="Search event, notes, location..." class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition" oninput="debounceLoadEvents()">
+        </div>
+
+        <div>
+          <select id="events-location-filter" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-brand-500 transition" onchange="loadEventsTable()">
+            <option value="">All Locations</option>
+          </select>
+        </div>
+
+        <div>
+          <select id="events-score-filter" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-brand-500 transition" onchange="loadEventsTable()">
+            <option value="">Any Score (0 - 10)</option>
+            <option value="9.0">⭐ 9.0+ Exceptional</option>
+            <option value="8.0">⭐ 8.0+ Great</option>
+            <option value="7.0">⭐ 7.0+ Good</option>
+            <option value="5.0">⭐ 5.0+ Average</option>
+          </select>
+        </div>
+
+        <div>
+          <select id="events-sort-filter" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-brand-500 transition" onchange="loadEventsTable()">
+            <option value="date_desc">📅 Date (Newest first)</option>
+            <option value="date_asc">📅 Date (Oldest first)</option>
+            <option value="score_desc">⭐ Score (Highest first)</option>
+            <option value="score_asc">⭐ Score (Lowest first)</option>
+            <option value="name_asc">🔤 Name (A - Z)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- EVENTS TABLE CARD -->
+      <div class="bg-dark-800 rounded-2xl border border-slate-800 overflow-hidden shadow-xl flex-1 flex flex-col">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-dark-700/60 text-xs uppercase text-slate-400 border-b border-slate-700">
+              <tr>
+                <th scope="col" class="px-4 py-3.5 w-16">Photo</th>
+                <th scope="col" class="px-4 py-3.5">Event Name</th>
+                <th scope="col" class="px-4 py-3.5">Location</th>
+                <th scope="col" class="px-4 py-3.5">Date & Time</th>
+                <th scope="col" class="px-4 py-3.5">Score</th>
+                <th scope="col" class="px-4 py-3.5 text-center">Fav</th>
+                <th scope="col" class="px-4 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="events-table-body" class="divide-y divide-slate-800/80">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="events-empty-state" class="hidden p-12 text-center flex-col items-center justify-center">
+          <div class="w-12 h-12 rounded-full bg-dark-700 flex items-center justify-center text-slate-400 mb-3 mx-auto">
+            <i data-lucide="inbox" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-base font-semibold text-white mb-1">No events found</h3>
+          <p class="text-xs text-slate-400 max-w-sm mx-auto mb-4">Try adjusting your filters or click below to log a new event.</p>
+          <button onclick="openAddEventModal()" class="px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold">
+            Log New Event
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. KPIS & ANALYTICS TAB -->
+    <section id="tab-kpis" class="tab-content hidden max-w-7xl mx-auto w-full px-4 lg:px-8 py-6 flex-1">
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold text-white tracking-tight">Analytics & Key Performance Indicators</h2>
+        <p class="text-sm text-slate-400">Personal performance statistics across your logged spots and experiences.</p>
+      </div>
+
+      <!-- MAIN KPI METRIC CARDS GRID -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        
+        <!-- Total Events -->
+        <div class="bg-dark-800 p-5 rounded-2xl border border-slate-800 shadow-lg relative overflow-hidden group">
+          <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-brand-500/10 rounded-full blur-xl group-hover:bg-brand-500/20 transition"></div>
+          <div class="flex items-center justify-between text-slate-400 mb-2">
+            <span class="text-xs font-medium uppercase tracking-wider">Total Events</span>
+            <div class="p-2 rounded-xl bg-brand-500/10 text-brand-400">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div id="kpi-total-events" class="text-3xl font-extrabold text-white">0</div>
+          <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+            <span class="text-emerald-400 flex items-center">Live logged</span>
+          </div>
+        </div>
+
+        <!-- Total Locations -->
+        <div class="bg-dark-800 p-5 rounded-2xl border border-slate-800 shadow-lg relative overflow-hidden group">
+          <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-accent-500/10 rounded-full blur-xl group-hover:bg-accent-500/20 transition"></div>
+          <div class="flex items-center justify-between text-slate-400 mb-2">
+            <span class="text-xs font-medium uppercase tracking-wider">Total Locations</span>
+            <div class="p-2 rounded-xl bg-accent-500/10 text-accent-400">
+              <i data-lucide="map-pin" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div id="kpi-total-locations" class="text-3xl font-extrabold text-white">0</div>
+          <div class="text-[11px] text-slate-400 mt-1">Unique map pins</div>
+        </div>
+
+        <!-- Events Per Location -->
+        <div class="bg-dark-800 p-5 rounded-2xl border border-slate-800 shadow-lg relative overflow-hidden group">
+          <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-amber-500/10 rounded-full blur-xl group-hover:bg-amber-500/20 transition"></div>
+          <div class="flex items-center justify-between text-slate-400 mb-2">
+            <span class="text-xs font-medium uppercase tracking-wider">Events / Loc</span>
+            <div class="p-2 rounded-xl bg-amber-500/10 text-amber-400">
+              <i data-lucide="repeat" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div id="kpi-events-per-loc" class="text-3xl font-extrabold text-white">0.0</div>
+          <div class="text-[11px] text-slate-400 mt-1">Average visits per spot</div>
+        </div>
+
+        <!-- Average Score Overall -->
+        <div class="bg-dark-800 p-5 rounded-2xl border border-slate-800 shadow-lg relative overflow-hidden group">
+          <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-emerald-500/10 rounded-full blur-xl group-hover:bg-emerald-500/20 transition"></div>
+          <div class="flex items-center justify-between text-slate-400 mb-2">
+            <span class="text-xs font-medium uppercase tracking-wider">Avg Experience</span>
+            <div class="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+              <i data-lucide="star" class="w-4 h-4"></i>
+            </div>
+          </div>
+          <div id="kpi-avg-score" class="text-3xl font-extrabold text-amber-400 flex items-center gap-1">
+            0.0 <span class="text-xs text-slate-400 font-normal">/ 10</span>
+          </div>
+          <div class="text-[11px] text-slate-400 mt-1">Overall experience rating</div>
+        </div>
+
+      </div>
+
+      <!-- SPOTLIGHT HIGHLIGHTS CARDS -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        
+        <!-- Favorite Location By Score -->
+        <div class="bg-gradient-to-br from-dark-800 to-dark-700/80 p-6 rounded-2xl border border-amber-500/30 shadow-xl relative overflow-hidden">
+          <div class="flex items-center justify-between mb-4">
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1.5">
+              <i data-lucide="trophy" class="w-3.5 h-3.5 text-amber-400"></i> Top Rated Location
+            </span>
+            <div id="kpi-fav-score-badge" class="text-lg font-black text-amber-400 flex items-center gap-1">
+              <i data-lucide="star" class="w-4 h-4 fill-amber-400"></i> 0.0
+            </div>
+          </div>
+          <h3 id="kpi-fav-loc-name" class="text-2xl font-bold text-white mb-1">No data yet</h3>
+          <p id="kpi-fav-loc-cat" class="text-xs text-slate-400 mb-4">Category</p>
+          <div class="flex items-center justify-between pt-4 border-t border-slate-700/60 text-xs text-slate-300">
+            <span id="kpi-fav-loc-events">0 logged events</span>
+            <button id="kpi-fav-loc-btn" class="text-brand-400 hover:text-brand-300 font-semibold flex items-center gap-1">
+              View on map <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Most Frequented Location -->
+        <div class="bg-gradient-to-br from-dark-800 to-dark-700/80 p-6 rounded-2xl border border-accent-500/30 shadow-xl relative overflow-hidden">
+          <div class="flex items-center justify-between mb-4">
+            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-accent-500/20 text-accent-300 border border-accent-500/30 flex items-center gap-1.5">
+              <i data-lucide="flame" class="w-3.5 h-3.5 text-accent-400"></i> Most Frequented Spot
+            </span>
+            <div id="kpi-freq-count-badge" class="text-lg font-black text-accent-400">
+              0 visits
+            </div>
+          </div>
+          <h3 id="kpi-freq-loc-name" class="text-2xl font-bold text-white mb-1">No data yet</h3>
+          <p id="kpi-freq-loc-cat" class="text-xs text-slate-400 mb-4">Category</p>
+          <div class="flex items-center justify-between pt-4 border-t border-slate-700/60 text-xs text-slate-300">
+            <span id="kpi-freq-loc-avg">Avg Score: 0.0</span>
+            <button id="kpi-freq-loc-btn" class="text-accent-400 hover:text-accent-300 font-semibold flex items-center gap-1">
+              View on map <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- CHARTS ROW -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        
+        <!-- Score Distribution Chart -->
+        <div class="bg-dark-800 p-5 rounded-2xl border border-slate-800 shadow-xl">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-white text-base flex items-center gap-2">
+              <i data-lucide="bar-chart-2" class="w-4 h-4 text-brand-400"></i> Score Distribution
+            </h3>
+            <span class="text-xs text-slate-400">1.0 to 10.0 scale</span>
+          </div>
+          <div class="h-64 relative">
+            <canvas id="scoreDistChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Category Breakdown Chart -->
+        <div class="bg-dark-800 p-5 rounded-2xl border border-slate-800 shadow-xl">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-white text-base flex items-center gap-2">
+              <i data-lucide="pie-chart" class="w-4 h-4 text-accent-400"></i> Events by Category
+            </h3>
+            <span class="text-xs text-slate-400">Activity breakdown</span>
+          </div>
+          <div class="h-64 relative">
+            <canvas id="categoryChart"></canvas>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- LEADERBOARD OF TOP 5 LOCATIONS -->
+      <div class="bg-dark-800 p-6 rounded-2xl border border-slate-800 shadow-xl">
+        <h3 class="font-bold text-white text-lg mb-4 flex items-center gap-2">
+          <i data-lucide="medal" class="w-5 h-5 text-amber-400"></i> Top Rated Locations Leaderboard
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="text-xs uppercase text-slate-400 border-b border-slate-700">
+              <tr>
+                <th class="py-3 px-4">Rank</th>
+                <th class="py-3 px-4">Location</th>
+                <th class="py-3 px-4">Category</th>
+                <th class="py-3 px-4 text-center">Events Logged</th>
+                <th class="py-3 px-4 text-right">Avg Score</th>
+              </tr>
+            </thead>
+            <tbody id="kpis-leaderboard-body" class="divide-y divide-slate-800/80">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- 4. FAVORITES TAB -->
+    <section id="tab-favorites" class="tab-content hidden max-w-7xl mx-auto w-full px-4 lg:px-8 py-6 flex-1">
+      <div class="mb-6 flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            <i data-lucide="star" class="w-6 h-6 text-amber-400 fill-amber-400"></i> Favorite Events & Highlights
+          </h2>
+          <p class="text-sm text-slate-400">Your hand-picked top personal experiences and memories.</p>
+        </div>
+      </div>
+
+      <div id="favorites-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Rendered via JS -->
+      </div>
+
+      <div id="favorites-empty-state" class="hidden p-16 text-center">
+        <div class="w-16 h-16 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto mb-4">
+          <i data-lucide="star" class="w-8 h-8"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-1">No favorite events yet</h3>
+        <p class="text-xs text-slate-400 max-w-sm mx-auto mb-4">Click the star icon on any event in the Map or Events table to bookmark your favorites here.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MOBILE BOTTOM NAVIGATION BAR -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-dark-800/95 backdrop-blur-xl border-t border-slate-800 px-4 py-2 flex items-center justify-around shadow-2xl">
+    <button onclick="switchTab('map')" id="mobile-nav-map" class="flex flex-col items-center gap-1 text-brand-400 text-[10px] font-semibold py-1">
+      <i data-lucide="map" class="w-5 h-5"></i>
+      <span>Map</span>
+    </button>
+    <button onclick="switchTab('events')" id="mobile-nav-events" class="flex flex-col items-center gap-1 text-slate-400 text-[10px] font-medium py-1">
+      <i data-lucide="list" class="w-5 h-5"></i>
+      <span>Events</span>
+    </button>
+    <button onclick="openAddEventModal()" class="flex flex-col items-center gap-1 -mt-5">
+      <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-brand-600 to-accent-500 flex items-center justify-center shadow-lg shadow-brand-500/40 text-white">
+        <i data-lucide="plus" class="w-6 h-6"></i>
+      </div>
+      <span class="text-[10px] text-slate-300 font-semibold">Log</span>
+    </button>
+    <button onclick="switchTab('kpis')" id="mobile-nav-kpis" class="flex flex-col items-center gap-1 text-slate-400 text-[10px] font-medium py-1">
+      <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+      <span>KPIs</span>
+    </button>
+    <button onclick="switchTab('favorites')" id="mobile-nav-favorites" class="flex flex-col items-center gap-1 text-slate-400 text-[10px] font-medium py-1">
+      <i data-lucide="star" class="w-5 h-5"></i>
+      <span>Favorites</span>
+    </button>
+  </nav>
+
+  <!-- ============================================================== -->
+  <!-- MODALS -->
+  <!-- ============================================================== -->
+
+  <!-- MODAL: AUTHENTICATION (LOGIN & REGISTER) -->
+  <div id="modal-auth" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-dark-800 border border-slate-700 rounded-3xl w-full max-w-md shadow-2xl p-6 relative">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-accent-500 flex items-center justify-center shadow-lg shadow-brand-500/30 text-white font-black text-2xl mx-auto mb-3">
+          AL
+        </div>
+        <h3 id="auth-modal-title" class="text-2xl font-extrabold text-white">Sign In to AL</h3>
+        <p id="auth-modal-subtitle" class="text-xs text-slate-400 mt-1">Access your private locations, logs, and score analytics.</p>
+      </div>
+
+      <!-- AUTH TABS -->
+      <div class="flex items-center p-1 bg-dark-900 rounded-xl mb-5 border border-slate-700/80">
+        <button type="button" id="auth-tab-login" onclick="toggleAuthMode('login')" class="flex-1 py-2 text-xs font-bold rounded-lg transition bg-brand-600 text-white shadow">
+          Sign In
+        </button>
+        <button type="button" id="auth-tab-register" onclick="toggleAuthMode('register')" class="flex-1 py-2 text-xs font-bold rounded-lg transition text-slate-400 hover:text-white">
+          Create Account
+        </button>
+      </div>
+
+      <form id="form-auth" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Username *</label>
+          <div class="relative">
+            <i data-lucide="user" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
+            <input type="text" id="auth-input-username" required placeholder="your username" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+        </div>
+
+        <div id="auth-email-group" class="hidden">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Email (Optional)</label>
+          <div class="relative">
+            <i data-lucide="mail" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
+            <input type="email" id="auth-input-email" placeholder="you@example.com" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Password *</label>
+          <div class="relative">
+            <i data-lucide="lock" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
+            <input type="password" id="auth-input-password" required placeholder="••••••••" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+        </div>
+
+        <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl bg-gradient-to-r from-brand-600 to-accent-600 hover:opacity-95 text-white text-sm font-bold shadow-lg shadow-brand-600/30 transition mt-2">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD / EDIT LOCATION -->
+  <div id="modal-location" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-dark-800 border border-slate-700 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-700 mb-5">
+        <h3 id="location-modal-title" class="text-xl font-bold text-white flex items-center gap-2">
+          <i data-lucide="map-pin" class="w-5 h-5 text-accent-400"></i> Add New Location
+        </h3>
+        <button onclick="closeModal('modal-location')" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-location" onsubmit="handleLocationSubmit(event)" class="space-y-4">
+        <input type="hidden" id="loc-input-id">
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Location Name *</label>
+          <input type="text" id="loc-input-name" required placeholder="e.g. Bogliasco Pier, Central Park..." class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Category</label>
+          <select id="loc-input-category" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+            <option value="Nature & Coast">Nature & Coast</option>
+            <option value="Restaurant & Dining">Restaurant & Dining</option>
+            <option value="Culture & Landmark">Culture & Landmark</option>
+            <option value="Travel & Exploration">Travel & Exploration</option>
+            <option value="Nightlife & Bars">Nightlife & Bars</option>
+            <option value="Sports & Fitness">Sports & Fitness</option>
+            <option value="Cafe & Bakery">Cafe & Bakery</option>
+            <option value="Home & Private">Home & Private</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Latitude *</label>
+            <input type="number" step="any" id="loc-input-lat" required placeholder="44.3789" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Longitude *</label>
+            <input type="number" step="any" id="loc-input-lng" required placeholder="9.0682" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="setCurrentGpsLocation()" class="text-xs text-accent-400 hover:text-accent-300 font-medium flex items-center gap-1">
+            <i data-lucide="crosshair" class="w-3.5 h-3.5"></i> Use my current GPS position
+          </button>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Address / Region</label>
+          <input type="text" id="loc-input-address" placeholder="Via Aurelia, Genoa, Italy" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Notes & Context</label>
+          <textarea id="loc-input-notes" rows="2" placeholder="Great spot for sunset drinks, accessible by train..." class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition"></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-700">
+          <button type="button" onclick="closeModal('modal-location')" class="px-4 py-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-300 text-sm font-medium transition">
+            Cancel
+          </button>
+          <button type="submit" id="loc-submit-btn" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold shadow-lg shadow-brand-600/30 transition">
+            Save Location
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD / EDIT EVENT -->
+  <div id="modal-event" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-dark-800 border border-slate-700 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto custom-scrollbar">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-700 mb-5">
+        <h3 id="event-modal-title" class="text-xl font-bold text-white flex items-center gap-2">
+          <i data-lucide="calendar-plus" class="w-5 h-5 text-brand-400"></i> Log Named Event
+        </h3>
+        <button onclick="closeModal('modal-event')" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-event" onsubmit="handleEventSubmit(event)" class="space-y-4">
+        <input type="hidden" id="evt-input-id">
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Location *</label>
+          <select id="evt-input-location-id" required class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Event Name *</label>
+          <input type="text" id="evt-input-name" required placeholder="e.g. Sunset Dinner, Rock Climbing, Live Jazz..." class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Date & Time *</label>
+            <input type="datetime-local" id="evt-input-date" required class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between">
+              <span>Score (1 - 10)</span>
+              <span id="score-display-val" class="text-amber-400 font-bold">9.0</span>
+            </label>
+            <div class="flex items-center gap-3 mt-2">
+              <input type="range" id="evt-input-score" min="1.0" max="10.0" step="0.1" value="9.0" class="w-full accent-brand-500 cursor-pointer" oninput="document.getElementById('score-display-val').innerText = parseFloat(this.value).toFixed(1)">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Event Photo</label>
+          <div class="flex flex-col gap-3">
+            <div id="photo-preview-container" class="hidden relative rounded-2xl overflow-hidden h-44 bg-dark-900 border border-slate-700">
+              <img id="photo-preview-img" src="" alt="Preview" class="w-full h-full object-cover">
+              <button type="button" onclick="removeSelectedPhoto()" class="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full">
+                <i data-lucide="trash-2" class="w-4 h-4 text-red-400"></i>
+              </button>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <label class="flex-1 cursor-pointer bg-dark-900 hover:bg-dark-700/80 border border-dashed border-slate-600 rounded-2xl p-4 text-center transition flex flex-col items-center justify-center gap-1.5">
+                <i data-lucide="upload-cloud" class="w-6 h-6 text-brand-400"></i>
+                <span class="text-xs font-medium text-slate-300">Upload Photo from Device / Camera</span>
+                <span class="text-[10px] text-slate-500">JPG, PNG, WebP up to 20MB</span>
+                <input type="file" id="evt-input-file" accept="image/*" class="hidden" onchange="handlePhotoFileSelected(this)">
+              </label>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <input type="text" id="evt-input-photo-url" placeholder="Or paste an image web URL (https://...)" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition" oninput="handlePhotoUrlInput(this.value)">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Description & Review</label>
+          <textarea id="evt-input-description" rows="3" placeholder="What made this event memorable? Highlights, prices, company..." class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition"></textarea>
+        </div>
+
+        <div class="flex items-center justify-between p-3 rounded-xl bg-dark-900/60 border border-slate-800">
+          <div class="flex items-center gap-2">
+            <i data-lucide="star" class="w-4 h-4 text-amber-400"></i>
+            <span class="text-sm font-medium text-slate-200">Mark as Favorite</span>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="evt-input-favorite" class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+          </label>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-700">
+          <button type="button" onclick="closeModal('modal-event')" class="px-4 py-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-300 text-sm font-medium transition">
+            Cancel
+          </button>
+          <button type="submit" id="evt-submit-btn" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold shadow-lg shadow-brand-600/30 transition">
+            Save Event
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: SHARE EVENT CARD -->
+  <div id="modal-share" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-dark-800 border border-slate-700 rounded-3xl w-full max-w-md shadow-2xl p-6 relative">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-700 mb-4">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i data-lucide="share-2" class="w-5 h-5 text-accent-400"></i> Share Event
+        </h3>
+        <button onclick="closeModal('modal-share')" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- PREVIEW CARD TO SHARE -->
+      <div id="share-card-preview" class="rounded-2xl overflow-hidden border border-slate-700 bg-dark-900 shadow-xl mb-4">
+        <div class="h-44 bg-dark-950 relative overflow-hidden">
+          <img id="share-img" src="" alt="Event" class="w-full h-full object-cover">
+          <div class="absolute top-2 right-2 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-amber-400 text-xs font-black flex items-center gap-1 border border-amber-500/30">
+            <i data-lucide="star" class="w-3 h-3 fill-amber-400"></i>
+            <span id="share-score">9.5</span>
+          </div>
+        </div>
+        <div class="p-4">
+          <h4 id="share-title" class="text-lg font-bold text-white mb-1">Event Title</h4>
+          <p id="share-loc" class="text-xs text-brand-300 font-medium mb-2 flex items-center gap-1">
+            <i data-lucide="map-pin" class="w-3 h-3"></i> Location
+          </p>
+          <p id="share-desc" class="text-xs text-slate-300 line-clamp-2 italic mb-2">Description...</p>
+          <p id="share-date" class="text-[11px] text-slate-500">Date</p>
+        </div>
+      </div>
+
+      <!-- SHARING ACTIONS -->
+      <div class="flex flex-col gap-2">
+        <button onclick="triggerNativeShare()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-accent-500 hover:opacity-90 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-brand-500/20 transition">
+          <i data-lucide="share" class="w-4 h-4"></i> Share with Device Apps
+        </button>
+        <button onclick="copyShareText()" class="w-full py-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-200 text-sm font-medium flex items-center justify-center gap-2 border border-slate-600 transition">
+          <i data-lucide="copy" class="w-4 h-4"></i> Copy Summary Text
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: HIGH-RES PHOTO LIGHTBOX -->
+  <div id="modal-lightbox" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden flex items-center justify-center p-4" onclick="closeModal('modal-lightbox')">
+    <div class="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onclick="event.stopPropagation()">
+      <button onclick="closeModal('modal-lightbox')" class="absolute -top-10 right-0 text-white/80 hover:text-white p-2">
+        <i data-lucide="x" class="w-6 h-6"></i>
+      </button>
+      <img id="lightbox-img" src="" alt="Full view" class="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl border border-white/10">
+      <p id="lightbox-caption" class="text-white text-sm mt-3 font-medium text-center"></p>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <script src="/app.js?v=5"></script>
+</body>
+</html>
