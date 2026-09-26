@@ -56,7 +56,7 @@
   <!-- Lucide Icons (Local) -->
   <script src="./vendor/lucide.min.js"></script>
 
-  <link rel="stylesheet" href="./styles.css?v=5">
+  <link rel="stylesheet" href="./styles.css?v=8">
 </head>
 <body class="bg-dark-900 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -287,8 +287,8 @@
           <div class="w-12 h-12 rounded-full bg-dark-700 flex items-center justify-center text-slate-400 mb-3 mx-auto">
             <i data-lucide="inbox" class="w-6 h-6"></i>
           </div>
-          <h3 class="text-base font-semibold text-white mb-1">No events found</h3>
-          <p class="text-xs text-slate-400 max-w-sm mx-auto mb-4">Try adjusting your filters or click below to log a new event.</p>
+          <h3 class="text-base font-semibold text-white mb-1">No events logged yet</h3>
+          <p class="text-xs text-slate-400 max-w-sm mx-auto mb-4">Click below to log your first event at a location.</p>
           <button onclick="openAddEventModal()" class="px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-semibold">
             Log New Event
           </button>
@@ -317,7 +317,7 @@
           </div>
           <div id="kpi-total-events" class="text-3xl font-extrabold text-white">0</div>
           <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
-            <span class="text-emerald-400 flex items-center">Live logged</span>
+            <span class="text-emerald-400 flex items-center">Private log</span>
           </div>
         </div>
 
@@ -574,6 +574,55 @@
     </div>
   </div>
 
+  <!-- MODAL: CHANGE PASSWORD -->
+  <div id="modal-password" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-dark-800 border border-slate-700 rounded-3xl w-full max-w-md shadow-2xl p-6 relative">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-700 mb-4">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i data-lucide="key" class="w-5 h-5 text-accent-400"></i> Change Password
+        </h3>
+        <button onclick="closeModal('modal-password')" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-password" onsubmit="handleChangePasswordSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Current Password *</label>
+          <div class="relative">
+            <i data-lucide="lock" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
+            <input type="password" id="pass-input-current" required placeholder="••••••••" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">New Password *</label>
+          <div class="relative">
+            <i data-lucide="key-round" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
+            <input type="password" id="pass-input-new" required minlength="4" placeholder="Minimum 4 characters" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Confirm New Password *</label>
+          <div class="relative">
+            <i data-lucide="check-circle-2" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
+            <input type="password" id="pass-input-confirm" required minlength="4" placeholder="Repeat new password" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-700">
+          <button type="button" onclick="closeModal('modal-password')" class="px-4 py-2.5 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-300 text-sm font-medium transition">
+            Cancel
+          </button>
+          <button type="submit" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold shadow-lg shadow-brand-600/30 transition">
+            Update Password
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- MODAL: ADD / EDIT LOCATION -->
   <div id="modal-location" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4 overflow-y-auto">
     <div class="bg-dark-800 border border-slate-700 rounded-3xl w-full max-w-lg shadow-2xl p-6 relative">
@@ -802,6 +851,6 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <script src="./app.js?v=7"></script>
+  <script src="./app.js?v=9"></script>
 </body>
 </html>

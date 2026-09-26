@@ -127,7 +127,7 @@ function requireAuth(req, res, next) {
   const authHeader = req.headers['authorization'] || '';
   let token = null;
   if (authHeader.startsWith('Bearer ')) {
-    token = authHeader.slice(7).trim();
+    token = authHeader.slice(7);
   } else if (req.query.token) {
     token = req.query.token;
   }
@@ -138,103 +138,6 @@ function requireAuth(req, res, next) {
   }
   req.user = user;
   next();
-}
-
-// Helper to seed initial starter data for new accounts
-function seedUserData(userId) {
-  const now = Date.now();
-  const sampleLocations = [
-    {
-      id: `loc_${Date.now()}_1`,
-      name: 'Piazza De Ferrari',
-      category: 'Culture & Landmark',
-      lat: 44.4072,
-      lng: 8.9340,
-      address: 'Piazza Raffaele De Ferrari, 16121 Genova GE, Italy',
-      notes: 'The main square of Genoa with the iconic central bronze fountain.'
-    },
-    {
-      id: `loc_${Date.now()}_2`,
-      name: 'Bogliasco Cliffside Viewpoint',
-      category: 'Nature & Coast',
-      lat: 44.3789,
-      lng: 9.0682,
-      address: 'Via Giuseppe Mazzini, 16031 Bogliasco GE, Italy',
-      notes: 'Scenic rocky coastline overlooking the Golfo Paradiso.'
-    },
-    {
-      id: `loc_${Date.now()}_3`,
-      name: 'Trattoria Cavour 21',
-      category: 'Restaurant & Dining',
-      lat: 44.4089,
-      lng: 8.9288,
-      address: 'Piazza Cavour 21r, 16128 Genova GE, Italy',
-      notes: 'Authentic Genovese pesto and fresh seafood in the old port area.'
-    },
-    {
-      id: `loc_${Date.now()}_4`,
-      name: 'Portofino Promontory Lighthouse',
-      category: 'Travel & Exploration',
-      lat: 44.3005,
-      lng: 9.2178,
-      address: 'Faro di Portofino, 16034 Portofino GE, Italy',
-      notes: 'Panoramic coastal hike leading to the historic lighthouse.'
-    }
-  ];
-
-  const insertLoc = db.prepare(`
-    INSERT INTO locations (id, user_id, name, category, lat, lng, address, notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  for (const loc of sampleLocations) {
-    insertLoc.run(loc.id, userId, loc.name, loc.category, loc.lat, loc.lng, loc.address, loc.notes, now - 20 * 86400000, now - 20 * 86400000);
-  }
-
-  const sampleEvents = [
-    {
-      id: `evt_${Date.now()}_1`,
-      location_id: sampleLocations[0].id,
-      name: 'Late Summer Symphony at the Fountain',
-      date: '2026-09-02T19:30',
-      description: 'Outdoor classical concert right in the heart of Genoa. Beautiful evening breeze and vibrant atmosphere.',
-      score: 9.5,
-      photo_url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1200&q=80',
-      favorite: 1,
-      tags: 'concert, music, outdoor'
-    },
-    {
-      id: `evt_${Date.now()}_2`,
-      location_id: sampleLocations[1].id,
-      name: 'Sunset Espresso & Coastal Walk',
-      date: '2026-09-08T18:00',
-      description: 'Watched surfers on Bogliasco beach with an espresso. The light over the cliffs was stunning.',
-      score: 9.8,
-      photo_url: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=1200&q=80',
-      favorite: 1,
-      tags: 'sunset, coffee, sea'
-    },
-    {
-      id: `evt_${Date.now()}_3`,
-      location_id: sampleLocations[2].id,
-      name: 'Traditional Pesto & Trofie Dinner',
-      date: '2026-09-12T20:30',
-      description: 'World-class Genovese pesto trofie with potatoes and green beans. Incredible house white wine.',
-      score: 9.2,
-      photo_url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80',
-      favorite: 1,
-      tags: 'food, dinner, pasta'
-    }
-  ];
-
-  const insertEvt = db.prepare(`
-    INSERT INTO events (id, user_id, location_id, name, date, description, score, photo_url, favorite, tags, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  for (const evt of sampleEvents) {
-    insertEvt.run(evt.id, userId, evt.location_id, evt.name, evt.date, evt.description, evt.score, evt.photo_url, evt.favorite, evt.tags, now - 5 * 86400000, now - 5 * 86400000);
-  }
 }
 
 // Middleware
@@ -271,7 +174,7 @@ const upload = multer({
 // AUTHENTICATION API ROUTES
 // ==========================================
 
-// Register New User
+// Register New User (Starts with a clean, private slate)
 app.post('/api/auth/register', (req, res) => {
   try {
     const { username, password, email } = req.body;
@@ -301,10 +204,6 @@ app.post('/api/auth/register', (req, res) => {
     `).run(id, cleanUsername, email ? email.trim() : null, passwordHash, now, now);
 
     const newUser = { id, username: cleanUsername, email: email ? email.trim() : '' };
-    
-    // Seed initial starter spots for the new user
-    seedUserData(id);
-
     const token = createToken(newUser);
     res.status(201).json({
       success: true,
@@ -343,6 +242,31 @@ app.post('/api/auth/login', (req, res) => {
       user,
       token
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Change Password Endpoint
+app.post('/api/auth/change-password', requireAuth, (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required.' });
+    }
+    if (newPassword.length < 4) {
+      return res.status(400).json({ error: 'New password must be at least 4 characters long.' });
+    }
+
+    const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!userRow || !verifyPassword(currentPassword, userRow.password_hash)) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+
+    const newHash = hashPassword(newPassword);
+    db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(newHash, Date.now(), req.user.id);
+
+    res.json({ success: true, message: 'Password changed successfully!' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

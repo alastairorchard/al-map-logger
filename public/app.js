@@ -1,4 +1,4 @@
-// AL - Map & Event Logger (Multi-User & Hybrid Client/Server Storage)
+// AL - Map & Event Logger (Multi-User, Strict Data Segregation & Change Password)
 
 // State Management
 let state = {
@@ -17,7 +17,7 @@ let state = {
     scoreDist: null,
     category: null
   },
-  isStandaloneClient: false // detected if static hosting like GitHub Pages
+  isStandaloneClient: false
 };
 
 let map = null;
@@ -39,7 +39,7 @@ function initIcons() {
 }
 
 // ==========================================
-// CLIENT-SIDE DATABASE FOR GITHUB PAGES / STANDALONE
+// CLIENT-SIDE DATABASE WITH STRICT PER-USER STORAGE
 // ==========================================
 const ClientDB = {
   getUsers() {
@@ -53,137 +53,38 @@ const ClientDB = {
     localStorage.setItem('al_users', JSON.stringify(users));
   },
   getLocations(userId) {
+    if (!userId) return [];
     try {
-      const all = JSON.parse(localStorage.getItem('al_locations') || '[]');
-      return userId ? all.filter(l => l.user_id === userId) : all;
+      return JSON.parse(localStorage.getItem(`al_user_${userId}_locations`) || '[]');
     } catch (e) {
       return [];
     }
   },
   saveLocations(locations, userId) {
-    try {
-      let all = JSON.parse(localStorage.getItem('al_locations') || '[]');
-      if (userId) {
-        all = all.filter(l => l.user_id !== userId).concat(locations);
-      } else {
-        all = locations;
-      }
-      localStorage.setItem('al_locations', JSON.stringify(all));
-    } catch (e) {}
+    if (!userId) return;
+    localStorage.setItem(`al_user_${userId}_locations`, JSON.stringify(locations));
   },
   getEvents(userId) {
+    if (!userId) return [];
     try {
-      const all = JSON.parse(localStorage.getItem('al_events') || '[]');
-      return userId ? all.filter(e => e.user_id === userId) : all;
+      return JSON.parse(localStorage.getItem(`al_user_${userId}_events`) || '[]');
     } catch (e) {
       return [];
     }
   },
   saveEvents(events, userId) {
-    try {
-      let all = JSON.parse(localStorage.getItem('al_events') || '[]');
-      if (userId) {
-        all = all.filter(e => e.user_id !== userId).concat(events);
-      } else {
-        all = events;
-      }
-      localStorage.setItem('al_events', JSON.stringify(all));
-    } catch (e) {}
+    if (!userId) return;
+    localStorage.setItem(`al_user_${userId}_events`, JSON.stringify(events));
   },
-  seedInitialData(userId) {
-    const now = Date.now();
-    const starterLocations = [
-      {
-        id: `loc_${Date.now()}_1`,
-        user_id: userId,
-        name: 'Piazza De Ferrari',
-        category: 'Culture & Landmark',
-        lat: 44.4072,
-        lng: 8.9340,
-        address: 'Piazza Raffaele De Ferrari, 16121 Genova GE, Italy',
-        notes: 'The main square of Genoa with the iconic central bronze fountain.',
-        created_at: now - 30 * 86400000,
-        updated_at: now - 30 * 86400000
-      },
-      {
-        id: `loc_${Date.now()}_2`,
-        user_id: userId,
-        name: 'Bogliasco Cliffside Viewpoint',
-        category: 'Nature & Coast',
-        lat: 44.3789,
-        lng: 9.0682,
-        address: 'Via Giuseppe Mazzini, 16031 Bogliasco GE, Italy',
-        notes: 'Scenic rocky coastline overlooking the Golfo Paradiso.',
-        created_at: now - 25 * 86400000,
-        updated_at: now - 25 * 86400000
-      },
-      {
-        id: `loc_${Date.now()}_3`,
-        user_id: userId,
-        name: 'Trattoria Cavour 21',
-        category: 'Restaurant & Dining',
-        lat: 44.4089,
-        lng: 8.9288,
-        address: 'Piazza Cavour 21r, 16128 Genova GE, Italy',
-        notes: 'Authentic Genovese pesto and fresh seafood in the old port area.',
-        created_at: now - 20 * 86400000,
-        updated_at: now - 20 * 86400000
-      },
-      {
-        id: `loc_${Date.now()}_4`,
-        user_id: userId,
-        name: 'Portofino Promontory Lighthouse',
-        category: 'Travel & Exploration',
-        lat: 44.3005,
-        lng: 9.2178,
-        address: 'Faro di Portofino, 16034 Portofino GE, Italy',
-        notes: 'Panoramic coastal hike leading to the historic lighthouse.',
-        created_at: now - 15 * 86400000,
-        updated_at: now - 15 * 86400000
-      }
-    ];
-
-    const starterEvents = [
-      {
-        id: `evt_${Date.now()}_1`,
-        user_id: userId,
-        location_id: starterLocations[0].id,
-        name: 'Late Summer Symphony at the Fountain',
-        date: '2026-09-02T19:30',
-        description: 'Outdoor classical concert right in the heart of Genoa. Beautiful evening breeze and vibrant atmosphere.',
-        score: 9.5,
-        photo_url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1200&q=80',
-        favorite: 1,
-        tags: 'concert, music, outdoor'
-      },
-      {
-        id: `evt_${Date.now()}_2`,
-        user_id: userId,
-        location_id: starterLocations[1].id,
-        name: 'Sunset Espresso & Coastal Walk',
-        date: '2026-09-08T18:00',
-        description: 'Watched surfers on Bogliasco beach with an espresso. The light over the cliffs was stunning.',
-        score: 9.8,
-        photo_url: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=1200&q=80',
-        favorite: 1,
-        tags: 'sunset, coffee, sea'
-      },
-      {
-        id: `evt_${Date.now()}_3`,
-        user_id: userId,
-        location_id: starterLocations[2].id,
-        name: 'Traditional Pesto & Trofie Dinner',
-        date: '2026-09-12T20:30',
-        description: 'World-class Genovese pesto trofie with potatoes and green beans. Incredible house white wine.',
-        score: 9.2,
-        photo_url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80',
-        favorite: 1,
-        tags: 'food, dinner, pasta'
-      }
-    ];
-
-    this.saveLocations(starterLocations, userId);
-    this.saveEvents(starterEvents, userId);
+  changePassword(userId, currentPassword, newPassword) {
+    const users = this.getUsers();
+    const user = users.find(u => u.id === userId);
+    if (!user || user.password !== currentPassword) {
+      return Promise.resolve({ status: 401, data: { error: 'Current password is incorrect.' } });
+    }
+    user.password = newPassword;
+    this.saveUsers(users);
+    return Promise.resolve({ status: 200, data: { success: true, message: 'Password changed successfully!' } });
   },
   computeKPIs(userId) {
     const locs = this.getLocations(userId);
@@ -198,7 +99,6 @@ const ClientDB = {
 
     const eventsPerLocation = totalLocations > 0 ? totalEvents / totalLocations : 0;
 
-    // Calculate per-location stats
     const locStats = locs.map(l => {
       const locEvts = evts.filter(e => e.location_id === l.id);
       const avg = locEvts.length > 0
@@ -212,16 +112,13 @@ const ClientDB = {
       };
     });
 
-    // Favorite by score
     const withEvents = locStats.filter(l => l.event_count >= 1);
     withEvents.sort((a, b) => b.avg_score - a.avg_score || b.event_count - a.event_count);
     const favoriteByScore = withEvents.length > 0 ? withEvents[0] : null;
 
-    // Most frequented
     const byFreq = [...locStats].sort((a, b) => b.event_count - a.event_count || b.avg_score - a.avg_score);
     const mostFrequented = byFreq.length > 0 && byFreq[0].event_count > 0 ? byFreq[0] : null;
 
-    // Category breakdown
     const catMap = {};
     locStats.forEach(l => {
       const cat = l.category || 'Other';
@@ -238,7 +135,6 @@ const ClientDB = {
       avg_score: c.event_count > 0 ? c.total_score / c.event_count : 0
     })).sort((a, b) => b.event_count - a.event_count);
 
-    // Score distribution
     const scoreDistribution = [
       { range: '9.0 - 10.0', count: evts.filter(e => e.score >= 9.0).length },
       { range: '7.0 - 8.9', count: evts.filter(e => e.score >= 7.0 && e.score < 9.0).length },
@@ -272,12 +168,10 @@ function checkAuthAndLoad() {
     return;
   }
 
-  // Attempt server authentication first; if on static GitHub Pages, use client auth
   fetchWithAuth('/api/auth/me')
     .then(res => {
       if (!res.ok) {
         if (res.status === 404 || res.status === 405) {
-          // Static host detected (e.g. GitHub Pages)
           state.isStandaloneClient = true;
           return loadClientSession();
         }
@@ -293,8 +187,7 @@ function checkAuthAndLoad() {
         loadAllData();
       }
     })
-    .catch(err => {
-      console.warn('Server auth failed, checking client store:', err);
+    .catch(() => {
       loadClientSession();
     });
 }
@@ -328,8 +221,7 @@ function fetchWithAuth(url, options = {}) {
   }
   options.headers = headers;
 
-  return fetch(url, options).catch(err => {
-    // Return synthetic 404 for offline/static pages
+  return fetch(url, options).catch(() => {
     return new Response(JSON.stringify({ error: 'Static host' }), { status: 404 });
   });
 }
@@ -341,13 +233,16 @@ function renderUserHeader() {
   if (state.currentUser) {
     const initials = state.currentUser.username.slice(0, 2).toUpperCase();
     container.innerHTML = `
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5">
         <div class="flex items-center gap-2 bg-dark-700/80 px-2.5 py-1.5 rounded-xl border border-slate-700">
           <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-brand-600 to-accent-500 text-white font-black text-xs flex items-center justify-center">
             ${initials}
           </div>
           <span class="text-xs font-bold text-white max-w-[100px] truncate">${escapeHtml(state.currentUser.username)}</span>
         </div>
+        <button onclick="openChangePasswordModal()" class="p-2 rounded-xl text-slate-400 hover:text-accent-400 hover:bg-dark-700 transition" title="Change Password">
+          <i data-lucide="key" class="w-4 h-4"></i>
+        </button>
         <button onclick="logout(true)" class="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-dark-700 transition" title="Sign Out">
           <i data-lucide="log-out" class="w-4 h-4"></i>
         </button>
@@ -405,7 +300,6 @@ function handleAuthSubmit(e) {
   })
     .then(r => {
       if (r.status === 404 || r.status === 405) {
-        // Fallback to client-side authentication for static GitHub Pages hosting
         return handleClientAuth(state.authMode, username, password, email);
       }
       return r.json().then(data => ({ status: r.status, data }));
@@ -426,8 +320,7 @@ function handleAuthSubmit(e) {
       showToast(state.authMode === 'register' ? 'Welcome to AL! 🎉 Account created.' : `Welcome back, ${data.user.username}! ⚡`, 'success');
       loadAllData();
     })
-    .catch(err => {
-      // Offline fallback
+    .catch(() => {
       handleClientAuth(state.authMode, username, password, email).then(({ status, data }) => {
         if (status < 400) {
           state.authToken = data.token;
@@ -436,7 +329,7 @@ function handleAuthSubmit(e) {
           localStorage.setItem('al_current_user', JSON.stringify(data.user));
           closeModal('modal-auth');
           renderUserHeader();
-          showToast(`Welcome, ${data.user.username}! (Local Session)`, 'success');
+          showToast(`Welcome, ${data.user.username}!`, 'success');
           loadAllData();
         } else {
           showToast(data.error || 'Authentication error', 'error');
@@ -454,14 +347,17 @@ function handleClientAuth(mode, username, password, email) {
       return Promise.resolve({ status: 409, data: { error: 'Username already registered.' } });
     }
     const user = {
-      id: `usr_${Date.now()}`,
+      id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       username: cleanUsername,
       email: email || '',
       password: password
     };
     users.push(user);
     ClientDB.saveUsers(users);
-    ClientDB.seedInitialData(user.id);
+    // New user starts with clean private state
+    ClientDB.saveLocations([], user.id);
+    ClientDB.saveEvents([], user.id);
+
     return Promise.resolve({
       status: 201,
       data: { user: { id: user.id, username: user.username, email: user.email }, token: `client_token_${user.id}` }
@@ -469,10 +365,6 @@ function handleClientAuth(mode, username, password, email) {
   } else {
     const user = users.find(u => u.username === cleanUsername && u.password === password);
     if (!user) {
-      // Auto-create default user if first time on GitHub Pages
-      if (users.length === 0 && cleanUsername) {
-        return handleClientAuth('register', username, password, email);
-      }
       return Promise.resolve({ status: 401, data: { error: 'Invalid username or password.' } });
     }
     return Promise.resolve({
@@ -480,6 +372,62 @@ function handleClientAuth(mode, username, password, email) {
       data: { user: { id: user.id, username: user.username, email: user.email }, token: `client_token_${user.id}` }
     });
   }
+}
+
+// ==========================================
+// CHANGE PASSWORD
+// ==========================================
+function openChangePasswordModal() {
+  document.getElementById('pass-input-current').value = '';
+  document.getElementById('pass-input-new').value = '';
+  document.getElementById('pass-input-confirm').value = '';
+  openModal('modal-password');
+}
+
+function handleChangePasswordSubmit(e) {
+  e.preventDefault();
+  const currentPassword = document.getElementById('pass-input-current').value;
+  const newPassword = document.getElementById('pass-input-new').value;
+  const confirmPassword = document.getElementById('pass-input-confirm').value;
+
+  if (newPassword !== confirmPassword) {
+    showToast('New passwords do not match!', 'error');
+    return;
+  }
+  if (newPassword.length < 4) {
+    showToast('Password must be at least 4 characters long.', 'error');
+    return;
+  }
+
+  fetchWithAuth('/api/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword })
+  })
+    .then(r => {
+      if (r.status === 404 || r.status === 405) {
+        return ClientDB.changePassword(state.currentUser.id, currentPassword, newPassword);
+      }
+      return r.json().then(data => ({ status: r.status, data }));
+    })
+    .then(({ status, data }) => {
+      if (status >= 400) {
+        showToast(data.error || 'Failed to update password', 'error');
+        return;
+      }
+      closeModal('modal-password');
+      showToast('Password updated successfully! 🔒', 'success');
+    })
+    .catch(() => {
+      ClientDB.changePassword(state.currentUser.id, currentPassword, newPassword).then(({ status, data }) => {
+        if (status >= 400) {
+          showToast(data.error || 'Failed to update password', 'error');
+        } else {
+          closeModal('modal-password');
+          showToast('Password updated successfully! 🔒', 'success');
+        }
+      });
+    });
 }
 
 function logout(notify = true) {
@@ -753,7 +701,6 @@ function openLocationDrawer(loc) {
     addEvtBtn.onclick = () => openAddEventModal(loc.id);
   }
 
-  // Filter events for this location
   if (state.isStandaloneClient) {
     const evts = state.events.filter(e => e.location_id === loc.id);
     renderDrawerEventsList(evts);
@@ -890,7 +837,6 @@ function loadAllData() {
       state.events = Array.isArray(events) ? events : [];
       state.kpis = kpis || null;
     } else {
-      // Standalone client storage mode
       loadFromClientDB();
       return;
     }
@@ -910,7 +856,6 @@ function loadFromClientDB() {
   const rawLocs = ClientDB.getLocations(uid);
   const rawEvts = ClientDB.getEvents(uid);
 
-  // Compute stats on client
   state.events = rawEvts.map(e => {
     const loc = rawLocs.find(l => l.id === e.location_id);
     return { ...e, location_name: loc ? loc.name : 'Unknown' };
@@ -977,24 +922,7 @@ function loadEventsTable() {
   if (!order) order = 'desc';
 
   if (state.isStandaloneClient) {
-    let filtered = [...state.events];
-    if (locationId) filtered = filtered.filter(e => e.location_id === locationId);
-    if (minScore) filtered = filtered.filter(e => e.score >= parseFloat(minScore));
-    if (search) {
-      filtered = filtered.filter(e =>
-        (e.name || '').toLowerCase().includes(search) ||
-        (e.description || '').toLowerCase().includes(search) ||
-        (e.location_name || '').toLowerCase().includes(search)
-      );
-    }
-
-    filtered.sort((a, b) => {
-      if (sort === 'score') return order === 'asc' ? a.score - b.score : b.score - a.score;
-      if (sort === 'name') return order === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
-      return order === 'asc' ? new Date(a.date) - new Date(b.date) : new Date(b.date) - new Date(a.date);
-    });
-
-    renderEventsTable(filtered);
+    loadEventsTableClientFallback(search, locationId, minScore, sort, order);
     return;
   }
 
@@ -1437,12 +1365,11 @@ function handleLocationSubmit(e) {
   })
     .then(r => {
       if (r.status === 404 || r.status === 405) {
-        // Fallback to client-side store
         return handleClientLocationSave(id, payload);
       }
       return r.json();
     })
-    .then(data => {
+    .then(() => {
       closeModal('modal-location');
       showToast(id ? 'Location updated successfully' : 'Location created successfully!', 'success');
       loadAllData();
@@ -1466,7 +1393,7 @@ function handleClientLocationSave(id, payload) {
     locs = locs.map(l => l.id === id ? { ...l, ...payload, updated_at: Date.now() } : l);
   } else {
     const newLoc = {
-      id: `loc_${Date.now()}`,
+      id: `loc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       user_id: uid,
       ...payload,
       created_at: Date.now(),
@@ -1551,7 +1478,6 @@ function handlePhotoFileSelected(input) {
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
 
-  // If running on static host (GitHub Pages), convert to compact Data URL
   if (state.isStandaloneClient || location.hostname.includes('github.io')) {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -1577,7 +1503,6 @@ function handlePhotoFileSelected(input) {
         setPhotoPreview(data.url);
         showToast('Photo uploaded successfully!', 'success');
       } else {
-        // Fallback to data URL
         const reader = new FileReader();
         reader.onload = (e) => setPhotoPreview(e.target.result);
         reader.readAsDataURL(file);
@@ -1668,7 +1593,7 @@ function handleClientEventSave(id, payload) {
     evts = evts.map(e => e.id === id ? { ...e, ...payload, updated_at: Date.now() } : e);
   } else {
     const newEvt = {
-      id: `evt_${Date.now()}`,
+      id: `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       user_id: uid,
       ...payload,
       created_at: Date.now(),
@@ -1803,7 +1728,6 @@ function openLightbox(url, caption) {
 // EXPORTS (JSON & CSV)
 // ==========================================
 function exportDataJSON() {
-  const uid = state.currentUser ? state.currentUser.id : null;
   const data = {
     app: 'AL',
     version: '1.0.0',
