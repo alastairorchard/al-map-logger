@@ -57,6 +57,12 @@ function initIcons() {
 // ==========================================
 // SUPABASE CLOUD CLIENT & REAL-TIME AUTH LISTENER
 // ==========================================
+// Clear legacy sample storage keys once and for all
+try {
+  localStorage.removeItem('al_locations');
+  localStorage.removeItem('al_events');
+} catch (e) {}
+
 function initCloudClient() {
   if (state.cloudConfig.url && state.cloudConfig.key && window.supabase) {
     try {
@@ -76,8 +82,7 @@ function initCloudClient() {
           renderProfileTab();
           closeModal('modal-auth');
 
-          // Auto-migrate any local legacy events/locations to Supabase
-          migrateLocalDataToSupabase(session.user.id);
+          // Real-time auth state update
           loadAllData();
         } else if (event === 'SIGNED_OUT') {
           state.currentUser = null;
@@ -375,7 +380,6 @@ function checkAuthAndLoad() {
         renderProfileTab();
         closeModal('modal-auth');
 
-        migrateLocalDataToSupabase(data.session.user.id);
         loadAllData();
       } else {
         renderUserHeader();
