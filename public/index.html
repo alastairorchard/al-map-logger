@@ -166,6 +166,12 @@
             <span id="drawer-category-badge" class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30">Category</span>
           </div>
           <div class="flex items-center gap-1">
+            <button id="drawer-edit-loc-btn" class="p-1.5 rounded-lg text-slate-400 hover:text-accent-400 hover:bg-dark-700 transition" title="Edit Location">
+              <i data-lucide="edit-3" class="w-4 h-4"></i>
+            </button>
+            <button id="drawer-delete-loc-btn" class="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition" title="Delete Location and all its events">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
             <button onclick="closeLocationDrawer()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-dark-700 transition">
               <i data-lucide="x" class="w-4 h-4"></i>
             </button>
@@ -976,6 +982,6 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <script src="./app.js?v=30"></script>
+  <script src="./app.js?v=35"></script>
 </body>
 </html>

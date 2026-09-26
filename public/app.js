@@ -1004,6 +1004,16 @@ function openLocationDrawer(loc) {
     addEvtBtn.onclick = () => openAddEventModal(loc.id);
   }
 
+  const editLocBtn = document.getElementById('drawer-edit-loc-btn');
+  if (editLocBtn) {
+    editLocBtn.onclick = () => editLocation(loc.id);
+  }
+
+  const delLocBtn = document.getElementById('drawer-delete-loc-btn');
+  if (delLocBtn) {
+    delLocBtn.onclick = () => deleteLocation(loc.id, loc.name);
+  }
+
   if (state.supabase) {
     state.supabase.from('events').select('*').eq('location_id', loc.id).order('date', { ascending: false }).then(({ data, error }) => {
       renderDrawerEventsList(data || []);
@@ -1016,6 +1026,53 @@ function openLocationDrawer(loc) {
   drawer.classList.remove('translate-y-full', 'md:translate-x-[120%]');
   drawer.classList.add('translate-y-0', 'md:translate-x-0');
   initIcons();
+}
+
+function editLocation(id) {
+  const loc = state.locations.find(l => l.id === id);
+  if (!loc) return;
+
+  document.getElementById('location-modal-title').innerHTML = `<i data-lucide="edit-3" class="w-5 h-5 text-brand-400"></i> Edit Location`;
+  document.getElementById('loc-input-id').value = loc.id;
+  document.getElementById('loc-input-name').value = loc.name;
+  document.getElementById('loc-input-address').value = loc.address || '';
+  document.getElementById('loc-input-notes').value = loc.notes || '';
+  document.getElementById('loc-input-category').value = loc.category || 'Other';
+  document.getElementById('loc-input-lat').value = parseFloat(loc.lat).toFixed(6);
+  document.getElementById('loc-input-lng').value = parseFloat(loc.lng).toFixed(6);
+
+  openModal('modal-location');
+}
+
+async function deleteLocation(locationId, locationName = 'this location') {
+  const confirmMsg = `Are you sure you want to delete "${locationName}"?\n\n⚠️ WARNING: All events and photos logged at this location will be permanently deleted as well.`;
+  if (!confirm(confirmMsg)) return;
+
+  if (state.supabase) {
+    showToast('Deleting location & events...', 'info');
+    await state.supabase.from('events').delete().eq('location_id', locationId);
+    const { error } = await state.supabase.from('locations').delete().eq('id', locationId);
+    if (error) {
+      showToast(error.message, 'error');
+      return;
+    }
+    closeLocationDrawer();
+    closeModal('modal-location');
+    showToast(`"${locationName}" and all associated events deleted! 🗑️`, 'info');
+    loadAllData();
+    return;
+  }
+
+  const uid = state.currentUser ? state.currentUser.id : null;
+  let locs = ClientDB.getLocations(uid).filter(l => l.id !== locationId);
+  let evts = ClientDB.getEvents(uid).filter(e => e.location_id !== locationId);
+  ClientDB.saveLocations(locs, uid);
+  ClientDB.saveEvents(evts, uid);
+
+  closeLocationDrawer();
+  closeModal('modal-location');
+  showToast(`"${locationName}" and all associated events deleted! 🗑️`, 'info');
+  loadAllData();
 }
 
 function closeLocationDrawer() {
