@@ -607,18 +607,10 @@
 
       <form id="form-auth" onsubmit="handleAuthSubmit(event)" class="space-y-4">
         <div>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Username / Email *</label>
-          <div class="relative">
-            <i data-lucide="user" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
-            <input type="text" id="auth-input-username" required placeholder="your username or email" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
-          </div>
-        </div>
-
-        <div id="auth-email-group" class="hidden">
-          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Email (Optional)</label>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Email Address *</label>
           <div class="relative">
             <i data-lucide="mail" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
-            <input type="email" id="auth-input-email" placeholder="you@example.com" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+            <input type="email" id="auth-input-email" required placeholder="you@example.com" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
           </div>
         </div>
 
@@ -914,6 +906,6 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <script src="./app.js?v=12"></script>
+  <script src="./app.js?v=14"></script>
 </body>
 </html>

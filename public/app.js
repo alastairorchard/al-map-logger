@@ -384,24 +384,34 @@ function toggleAuthMode(mode) {
 
 function handleAuthSubmit(e) {
   e.preventDefault();
-  const username = document.getElementById('auth-input-username').value.trim();
+  const email = document.getElementById('auth-input-email').value.trim();
   const password = document.getElementById('auth-input-password').value;
-  const email = document.getElementById('auth-input-email')?.value.trim() || '';
 
   // 1. If Supabase Cloud Client is connected, authenticate through Supabase
   if (state.supabase) {
-    const authEmail = email || (username.includes('@') ? username : `${username}@al-app.local`);
+    const redirectUrl = window.location.origin + window.location.pathname;
     if (state.authMode === 'register') {
-      state.supabase.auth.signUp({ email: authEmail, password }).then(({ data, error }) => {
+      state.supabase.auth.signUp({
+        email: email,
+        password: password,
+        options: {
+          emailRedirectTo: redirectUrl
+        }
+      }).then(({ data, error }) => {
         if (error) {
           showToast(error.message, 'error');
           return;
         }
-        showToast('Account created! Logging in...', 'success');
-        checkAuthAndLoad();
+        if (data && data.session) {
+          showToast('Account created & signed in! ⭐', 'success');
+          checkAuthAndLoad();
+        } else if (data && data.user) {
+          showToast('Confirmation email sent to ' + email, 'info');
+          toggleAuthMode('login');
+        }
       });
     } else {
-      state.supabase.auth.signInWithPassword({ email: authEmail, password }).then(({ data, error }) => {
+      state.supabase.auth.signInWithPassword({ email: email, password }).then(({ data, error }) => {
         if (error) {
           showToast(error.message, 'error');
           return;
