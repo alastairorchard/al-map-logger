@@ -1,7 +1,15 @@
 // AL - Map & Event Logger (Multi-User, Supabase Real-time Cloud Sync & Offline Migration)
 
 const DEFAULT_SUPABASE_URL = 'https://bfwlzobdpbuippfbbjud.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'password';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_PcDpOFZptvEbE0wL8qDyLA_uqqkkf0A';
+
+// Clear legacy broken storage keys if present
+if (localStorage.getItem('al_supabase_key') && !localStorage.getItem('al_supabase_key').startsWith('sb_publishable_')) {
+  localStorage.removeItem('al_supabase_key');
+}
+if (localStorage.getItem('al_supabase_url') && !localStorage.getItem('al_supabase_url').includes('supabase.co')) {
+  localStorage.removeItem('al_supabase_url');
+}
 
 // State Management
 let state = {
