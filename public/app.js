@@ -1,4 +1,4 @@
-// AL - Map & Event Logger (Multi-User & Protected)
+// AL - Map & Event Logger (Multi-User & Hybrid Client/Server Storage)
 
 // State Management
 let state = {
@@ -16,7 +16,8 @@ let state = {
   charts: {
     scoreDist: null,
     category: null
-  }
+  },
+  isStandaloneClient: false // detected if static hosting like GitHub Pages
 };
 
 let map = null;
@@ -38,6 +39,230 @@ function initIcons() {
 }
 
 // ==========================================
+// CLIENT-SIDE DATABASE FOR GITHUB PAGES / STANDALONE
+// ==========================================
+const ClientDB = {
+  getUsers() {
+    try {
+      return JSON.parse(localStorage.getItem('al_users') || '[]');
+    } catch (e) {
+      return [];
+    }
+  },
+  saveUsers(users) {
+    localStorage.setItem('al_users', JSON.stringify(users));
+  },
+  getLocations(userId) {
+    try {
+      const all = JSON.parse(localStorage.getItem('al_locations') || '[]');
+      return userId ? all.filter(l => l.user_id === userId) : all;
+    } catch (e) {
+      return [];
+    }
+  },
+  saveLocations(locations, userId) {
+    try {
+      let all = JSON.parse(localStorage.getItem('al_locations') || '[]');
+      if (userId) {
+        all = all.filter(l => l.user_id !== userId).concat(locations);
+      } else {
+        all = locations;
+      }
+      localStorage.setItem('al_locations', JSON.stringify(all));
+    } catch (e) {}
+  },
+  getEvents(userId) {
+    try {
+      const all = JSON.parse(localStorage.getItem('al_events') || '[]');
+      return userId ? all.filter(e => e.user_id === userId) : all;
+    } catch (e) {
+      return [];
+    }
+  },
+  saveEvents(events, userId) {
+    try {
+      let all = JSON.parse(localStorage.getItem('al_events') || '[]');
+      if (userId) {
+        all = all.filter(e => e.user_id !== userId).concat(events);
+      } else {
+        all = events;
+      }
+      localStorage.setItem('al_events', JSON.stringify(all));
+    } catch (e) {}
+  },
+  seedInitialData(userId) {
+    const now = Date.now();
+    const starterLocations = [
+      {
+        id: `loc_${Date.now()}_1`,
+        user_id: userId,
+        name: 'Piazza De Ferrari',
+        category: 'Culture & Landmark',
+        lat: 44.4072,
+        lng: 8.9340,
+        address: 'Piazza Raffaele De Ferrari, 16121 Genova GE, Italy',
+        notes: 'The main square of Genoa with the iconic central bronze fountain.',
+        created_at: now - 30 * 86400000,
+        updated_at: now - 30 * 86400000
+      },
+      {
+        id: `loc_${Date.now()}_2`,
+        user_id: userId,
+        name: 'Bogliasco Cliffside Viewpoint',
+        category: 'Nature & Coast',
+        lat: 44.3789,
+        lng: 9.0682,
+        address: 'Via Giuseppe Mazzini, 16031 Bogliasco GE, Italy',
+        notes: 'Scenic rocky coastline overlooking the Golfo Paradiso.',
+        created_at: now - 25 * 86400000,
+        updated_at: now - 25 * 86400000
+      },
+      {
+        id: `loc_${Date.now()}_3`,
+        user_id: userId,
+        name: 'Trattoria Cavour 21',
+        category: 'Restaurant & Dining',
+        lat: 44.4089,
+        lng: 8.9288,
+        address: 'Piazza Cavour 21r, 16128 Genova GE, Italy',
+        notes: 'Authentic Genovese pesto and fresh seafood in the old port area.',
+        created_at: now - 20 * 86400000,
+        updated_at: now - 20 * 86400000
+      },
+      {
+        id: `loc_${Date.now()}_4`,
+        user_id: userId,
+        name: 'Portofino Promontory Lighthouse',
+        category: 'Travel & Exploration',
+        lat: 44.3005,
+        lng: 9.2178,
+        address: 'Faro di Portofino, 16034 Portofino GE, Italy',
+        notes: 'Panoramic coastal hike leading to the historic lighthouse.',
+        created_at: now - 15 * 86400000,
+        updated_at: now - 15 * 86400000
+      }
+    ];
+
+    const starterEvents = [
+      {
+        id: `evt_${Date.now()}_1`,
+        user_id: userId,
+        location_id: starterLocations[0].id,
+        name: 'Late Summer Symphony at the Fountain',
+        date: '2026-09-02T19:30',
+        description: 'Outdoor classical concert right in the heart of Genoa. Beautiful evening breeze and vibrant atmosphere.',
+        score: 9.5,
+        photo_url: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1200&q=80',
+        favorite: 1,
+        tags: 'concert, music, outdoor'
+      },
+      {
+        id: `evt_${Date.now()}_2`,
+        user_id: userId,
+        location_id: starterLocations[1].id,
+        name: 'Sunset Espresso & Coastal Walk',
+        date: '2026-09-08T18:00',
+        description: 'Watched surfers on Bogliasco beach with an espresso. The light over the cliffs was stunning.',
+        score: 9.8,
+        photo_url: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=1200&q=80',
+        favorite: 1,
+        tags: 'sunset, coffee, sea'
+      },
+      {
+        id: `evt_${Date.now()}_3`,
+        user_id: userId,
+        location_id: starterLocations[2].id,
+        name: 'Traditional Pesto & Trofie Dinner',
+        date: '2026-09-12T20:30',
+        description: 'World-class Genovese pesto trofie with potatoes and green beans. Incredible house white wine.',
+        score: 9.2,
+        photo_url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200&q=80',
+        favorite: 1,
+        tags: 'food, dinner, pasta'
+      }
+    ];
+
+    this.saveLocations(starterLocations, userId);
+    this.saveEvents(starterEvents, userId);
+  },
+  computeKPIs(userId) {
+    const locs = this.getLocations(userId);
+    const evts = this.getEvents(userId);
+
+    const totalEvents = evts.length;
+    const totalLocations = locs.length;
+    const totalFavorites = evts.filter(e => e.favorite === 1 || e.favorite === true).length;
+    const avgScoreOverall = totalEvents > 0
+      ? evts.reduce((sum, e) => sum + (parseFloat(e.score) || 0), 0) / totalEvents
+      : 0;
+
+    const eventsPerLocation = totalLocations > 0 ? totalEvents / totalLocations : 0;
+
+    // Calculate per-location stats
+    const locStats = locs.map(l => {
+      const locEvts = evts.filter(e => e.location_id === l.id);
+      const avg = locEvts.length > 0
+        ? locEvts.reduce((sum, e) => sum + (parseFloat(e.score) || 0), 0) / locEvts.length
+        : 0;
+      return {
+        ...l,
+        event_count: locEvts.length,
+        avg_score: avg,
+        latest_event_date: locEvts.length > 0 ? locEvts[0].date : null
+      };
+    });
+
+    // Favorite by score
+    const withEvents = locStats.filter(l => l.event_count >= 1);
+    withEvents.sort((a, b) => b.avg_score - a.avg_score || b.event_count - a.event_count);
+    const favoriteByScore = withEvents.length > 0 ? withEvents[0] : null;
+
+    // Most frequented
+    const byFreq = [...locStats].sort((a, b) => b.event_count - a.event_count || b.avg_score - a.avg_score);
+    const mostFrequented = byFreq.length > 0 && byFreq[0].event_count > 0 ? byFreq[0] : null;
+
+    // Category breakdown
+    const catMap = {};
+    locStats.forEach(l => {
+      const cat = l.category || 'Other';
+      if (!catMap[cat]) catMap[cat] = { category: cat, location_count: 0, event_count: 0, total_score: 0 };
+      catMap[cat].location_count += 1;
+      catMap[cat].event_count += l.event_count;
+      catMap[cat].total_score += l.avg_score * l.event_count;
+    });
+
+    const categoryBreakdown = Object.values(catMap).map(c => ({
+      category: c.category,
+      location_count: c.location_count,
+      event_count: c.event_count,
+      avg_score: c.event_count > 0 ? c.total_score / c.event_count : 0
+    })).sort((a, b) => b.event_count - a.event_count);
+
+    // Score distribution
+    const scoreDistribution = [
+      { range: '9.0 - 10.0', count: evts.filter(e => e.score >= 9.0).length },
+      { range: '7.0 - 8.9', count: evts.filter(e => e.score >= 7.0 && e.score < 9.0).length },
+      { range: '5.0 - 6.9', count: evts.filter(e => e.score >= 5.0 && e.score < 7.0).length },
+      { range: '3.0 - 4.9', count: evts.filter(e => e.score >= 3.0 && e.score < 5.0).length },
+      { range: '1.0 - 2.9', count: evts.filter(e => e.score < 3.0).length }
+    ];
+
+    return {
+      total_events: totalEvents,
+      total_locations: totalLocations,
+      total_favorites: totalFavorites,
+      average_score_overall: avgScoreOverall,
+      events_per_location: eventsPerLocation,
+      favorite_location_by_score: favoriteByScore,
+      most_frequented_location: mostFrequented,
+      top_locations: withEvents.slice(0, 5),
+      category_breakdown: categoryBreakdown,
+      score_distribution: scoreDistribution
+    };
+  }
+};
+
+// ==========================================
 // AUTHENTICATION CLIENT LOGIC
 // ==========================================
 function checkAuthAndLoad() {
@@ -47,21 +272,53 @@ function checkAuthAndLoad() {
     return;
   }
 
+  // Attempt server authentication first; if on static GitHub Pages, use client auth
   fetchWithAuth('/api/auth/me')
     .then(res => {
-      if (!res.ok) throw new Error('Session expired');
+      if (!res.ok) {
+        if (res.status === 404 || res.status === 405) {
+          // Static host detected (e.g. GitHub Pages)
+          state.isStandaloneClient = true;
+          return loadClientSession();
+        }
+        throw new Error('Session expired');
+      }
       return res.json();
     })
     .then(data => {
-      state.currentUser = data.user;
+      if (data && data.user) {
+        state.currentUser = data.user;
+        renderUserHeader();
+        closeModal('modal-auth');
+        loadAllData();
+      }
+    })
+    .catch(err => {
+      console.warn('Server auth failed, checking client store:', err);
+      loadClientSession();
+    });
+}
+
+function loadClientSession() {
+  const token = state.authToken;
+  if (!token) {
+    renderUserHeader();
+    openAuthModal('login');
+    return;
+  }
+
+  try {
+    const rawUser = localStorage.getItem('al_current_user');
+    if (rawUser) {
+      state.currentUser = JSON.parse(rawUser);
       renderUserHeader();
       closeModal('modal-auth');
       loadAllData();
-    })
-    .catch(err => {
-      console.warn('Auth check failed:', err);
-      logout(false);
-    });
+      return;
+    }
+  } catch (e) {}
+
+  logout(false);
 }
 
 function fetchWithAuth(url, options = {}) {
@@ -71,12 +328,9 @@ function fetchWithAuth(url, options = {}) {
   }
   options.headers = headers;
 
-  return fetch(url, options).then(res => {
-    if (res.status === 401) {
-      logout(false);
-      openAuthModal('login');
-    }
-    return res;
+  return fetch(url, options).catch(err => {
+    // Return synthetic 404 for offline/static pages
+    return new Response(JSON.stringify({ error: 'Static host' }), { status: 404 });
   });
 }
 
@@ -138,18 +392,24 @@ function toggleAuthMode(mode) {
 function handleAuthSubmit(e) {
   e.preventDefault();
   const username = document.getElementById('auth-input-username').value.trim();
-  const password = document.getElementById('auth-input-password').value;
+  const *** = document.getElementById('auth-input-***').value;
   const email = document.getElementById('auth-input-email')?.value.trim() || '';
 
   const endpoint = state.authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
-  const payload = { username, password, email };
+  const payload = { username, ***, email };
 
   fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   })
-    .then(r => r.json().then(data => ({ status: r.status, data })))
+    .then(r => {
+      if (r.status === 404 || r.status === 405) {
+        // Fallback to client-side authentication for static GitHub Pages hosting
+        return handleClientAuth(state.authMode, username, ***, email);
+      }
+      return r.json().then(data => ({ status: r.status, data }));
+    })
     .then(({ status, data }) => {
       if (status >= 400 || !data.token) {
         showToast(data.error || 'Authentication failed', 'error');
@@ -159,6 +419,7 @@ function handleAuthSubmit(e) {
       state.authToken = data.token;
       state.currentUser = data.user;
       localStorage.setItem('al_auth_token', data.token);
+      localStorage.setItem('al_current_user', JSON.stringify(data.user));
 
       closeModal('modal-auth');
       renderUserHeader();
@@ -166,8 +427,59 @@ function handleAuthSubmit(e) {
       loadAllData();
     })
     .catch(err => {
-      showToast('Network error: ' + err.message, 'error');
+      // Offline fallback
+      handleClientAuth(state.authMode, username, ***, email).then(({ status, data }) => {
+        if (status < 400) {
+          state.authToken = data.token;
+          state.currentUser = data.user;
+          localStorage.setItem('al_auth_token', data.token);
+          localStorage.setItem('al_current_user', JSON.stringify(data.user));
+          closeModal('modal-auth');
+          renderUserHeader();
+          showToast(`Welcome, ${data.user.username}! (Local Session)`, 'success');
+          loadAllData();
+        } else {
+          showToast(data.error || 'Authentication error', 'error');
+        }
+      });
     });
+}
+
+function handleClientAuth(mode, username, ***, email) {
+  const users = ClientDB.getUsers();
+  const cleanUsername = username.toLowerCase();
+
+  if (mode === 'register') {
+    if (users.find(u => u.username === cleanUsername)) {
+      return Promise.resolve({ status: 409, data: { error: 'Username already registered.' } });
+    }
+    const user = {
+      id: `usr_${Date.now()}`,
+      username: cleanUsername,
+      email: email || '',
+      ***: ***
+    };
+    users.push(user);
+    ClientDB.saveUsers(users);
+    ClientDB.seedInitialData(user.id);
+    return Promise.resolve({
+      status: 201,
+      data: { user: { id: user.id, username: user.username, email: user.email }, token: `client_token_${user.id}` }
+    });
+  } else {
+    const user = users.find(u => u.username === cleanUsername && u.*** === ***);
+    if (!user) {
+      // Auto-create default user if first time on GitHub Pages
+      if (users.length === 0 && cleanUsername) {
+        return handleClientAuth('register', username, ***, email);
+      }
+      return Promise.resolve({ status: 401, data: { error: 'Invalid username or ***.' } });
+    }
+    return Promise.resolve({
+      status: 200,
+      data: { user: { id: user.id, username: user.username, email: user.email }, token: `client_token_${user.id}` }
+    });
+  }
 }
 
 function logout(notify = true) {
@@ -177,6 +489,7 @@ function logout(notify = true) {
   state.events = [];
   state.kpis = null;
   localStorage.removeItem('al_auth_token');
+  localStorage.removeItem('al_current_user');
 
   renderUserHeader();
   if (markersLayer) markersLayer.clearLayers();
@@ -260,7 +573,6 @@ function initMap() {
 
     markersLayer = L.layerGroup().addTo(map);
 
-    // Map Click Listener to create a location at coordinates
     map.on('click', (e) => {
       if (e && e.latlng) {
         openAddLocationModal(e.latlng.lat, e.latlng.lng);
@@ -441,11 +753,26 @@ function openLocationDrawer(loc) {
     addEvtBtn.onclick = () => openAddEventModal(loc.id);
   }
 
-  fetchWithAuth(`/api/events?location_id=${loc.id}&sort=date&order=desc`)
-    .then(res => res.json())
-    .then(events => {
-      renderDrawerEventsList(events);
-    });
+  // Filter events for this location
+  if (state.isStandaloneClient) {
+    const evts = state.events.filter(e => e.location_id === loc.id);
+    renderDrawerEventsList(evts);
+  } else {
+    fetchWithAuth(`/api/events?location_id=${loc.id}&sort=date&order=desc`)
+      .then(res => res.json())
+      .then(events => {
+        if (Array.isArray(events)) {
+          renderDrawerEventsList(events);
+        } else {
+          const evts = state.events.filter(e => e.location_id === loc.id);
+          renderDrawerEventsList(evts);
+        }
+      })
+      .catch(() => {
+        const evts = state.events.filter(e => e.location_id === loc.id);
+        renderDrawerEventsList(evts);
+      });
+  }
 
   drawer.classList.remove('translate-y-full', 'md:translate-x-[120%]');
   drawer.classList.add('translate-y-0', 'md:translate-x-0');
@@ -551,25 +878,64 @@ function renderLocationCarousel() {
 // DATA LOADING (Locations, Events, KPIs)
 // ==========================================
 function loadAllData() {
-  if (!state.authToken) return;
+  if (!state.authToken || !state.currentUser) return;
 
   Promise.all([
     fetchWithAuth('/api/locations').then(r => r.json()),
     fetchWithAuth('/api/events').then(r => r.json()),
     fetchWithAuth('/api/kpis').then(r => r.json())
   ]).then(([locations, events, kpis]) => {
-    state.locations = Array.isArray(locations) ? locations : [];
-    state.events = Array.isArray(events) ? events : [];
-    state.kpis = kpis || null;
+    if (Array.isArray(locations)) {
+      state.locations = locations;
+      state.events = Array.isArray(events) ? events : [];
+      state.kpis = kpis || null;
+    } else {
+      // Standalone client storage mode
+      loadFromClientDB();
+      return;
+    }
 
     updateLocationSelectOptions();
     renderMapMarkers();
     renderLocationCarousel();
     loadEventsTable();
     loadKPIs();
-  }).catch(err => {
-    console.error('Error loading data:', err);
+  }).catch(() => {
+    loadFromClientDB();
   });
+}
+
+function loadFromClientDB() {
+  const uid = state.currentUser.id;
+  const rawLocs = ClientDB.getLocations(uid);
+  const rawEvts = ClientDB.getEvents(uid);
+
+  // Compute stats on client
+  state.events = rawEvts.map(e => {
+    const loc = rawLocs.find(l => l.id === e.location_id);
+    return { ...e, location_name: loc ? loc.name : 'Unknown' };
+  });
+
+  state.locations = rawLocs.map(l => {
+    const locEvts = rawEvts.filter(e => e.location_id === l.id);
+    const avg = locEvts.length > 0
+      ? locEvts.reduce((sum, e) => sum + (parseFloat(e.score) || 0), 0) / locEvts.length
+      : 0;
+    return {
+      ...l,
+      event_count: locEvts.length,
+      avg_score: avg,
+      latest_event_date: locEvts.length > 0 ? locEvts[0].date : null
+    };
+  });
+
+  state.kpis = ClientDB.computeKPIs(uid);
+
+  updateLocationSelectOptions();
+  renderMapMarkers();
+  renderLocationCarousel();
+  loadEventsTable();
+  loadKPIs();
 }
 
 function updateLocationSelectOptions() {
@@ -601,7 +967,7 @@ function debounceLoadEvents() {
 function loadEventsTable() {
   if (!state.authToken) return;
 
-  const search = (document.getElementById('events-search-filter')?.value || '').trim();
+  const search = (document.getElementById('events-search-filter')?.value || '').trim().toLowerCase();
   const locationId = document.getElementById('events-location-filter')?.value || '';
   const minScore = document.getElementById('events-score-filter')?.value || '';
   const sortOption = document.getElementById('events-sort-filter')?.value || 'date_desc';
@@ -609,6 +975,28 @@ function loadEventsTable() {
   let [sort, order] = sortOption.split('_');
   if (!sort) sort = 'date';
   if (!order) order = 'desc';
+
+  if (state.isStandaloneClient) {
+    let filtered = [...state.events];
+    if (locationId) filtered = filtered.filter(e => e.location_id === locationId);
+    if (minScore) filtered = filtered.filter(e => e.score >= parseFloat(minScore));
+    if (search) {
+      filtered = filtered.filter(e =>
+        (e.name || '').toLowerCase().includes(search) ||
+        (e.description || '').toLowerCase().includes(search) ||
+        (e.location_name || '').toLowerCase().includes(search)
+      );
+    }
+
+    filtered.sort((a, b) => {
+      if (sort === 'score') return order === 'asc' ? a.score - b.score : b.score - a.score;
+      if (sort === 'name') return order === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+      return order === 'asc' ? new Date(a.date) - new Date(b.date) : new Date(b.date) - new Date(a.date);
+    });
+
+    renderEventsTable(filtered);
+    return;
+  }
 
   const params = new URLSearchParams();
   if (search) params.append('search', search);
@@ -620,8 +1008,36 @@ function loadEventsTable() {
   fetchWithAuth(`/api/events?${params.toString()}`)
     .then(r => r.json())
     .then(events => {
-      renderEventsTable(Array.isArray(events) ? events : []);
+      if (Array.isArray(events)) {
+        renderEventsTable(events);
+      } else {
+        loadEventsTableClientFallback(search, locationId, minScore, sort, order);
+      }
+    })
+    .catch(() => {
+      loadEventsTableClientFallback(search, locationId, minScore, sort, order);
     });
+}
+
+function loadEventsTableClientFallback(search, locationId, minScore, sort, order) {
+  let filtered = [...state.events];
+  if (locationId) filtered = filtered.filter(e => e.location_id === locationId);
+  if (minScore) filtered = filtered.filter(e => e.score >= parseFloat(minScore));
+  if (search) {
+    filtered = filtered.filter(e =>
+      (e.name || '').toLowerCase().includes(search) ||
+      (e.description || '').toLowerCase().includes(search) ||
+      (e.location_name || '').toLowerCase().includes(search)
+    );
+  }
+
+  filtered.sort((a, b) => {
+    if (sort === 'score') return order === 'asc' ? a.score - b.score : b.score - a.score;
+    if (sort === 'name') return order === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+    return order === 'asc' ? new Date(a.date) - new Date(b.date) : new Date(b.date) - new Date(a.date);
+  });
+
+  renderEventsTable(filtered);
 }
 
 function renderEventsTable(events) {
@@ -700,11 +1116,26 @@ function renderEventsTable(events) {
 function loadKPIs() {
   if (!state.authToken) return;
 
+  if (state.isStandaloneClient) {
+    state.kpis = ClientDB.computeKPIs(state.currentUser.id);
+    renderKPIDashboard(state.kpis);
+    return;
+  }
+
   fetchWithAuth('/api/kpis')
     .then(r => r.json())
     .then(kpis => {
-      state.kpis = kpis;
-      renderKPIDashboard(kpis);
+      if (kpis && kpis.total_events !== undefined) {
+        state.kpis = kpis;
+        renderKPIDashboard(kpis);
+      } else {
+        state.kpis = ClientDB.computeKPIs(state.currentUser.id);
+        renderKPIDashboard(state.kpis);
+      }
+    })
+    .catch(() => {
+      state.kpis = ClientDB.computeKPIs(state.currentUser.id);
+      renderKPIDashboard(state.kpis);
     });
 }
 
@@ -866,10 +1297,25 @@ function renderCategoryChart(categories) {
 function loadFavoritesGrid() {
   if (!state.authToken) return;
 
+  if (state.isStandaloneClient) {
+    const favs = state.events.filter(e => e.favorite === 1 || e.favorite === true);
+    renderFavoritesGrid(favs);
+    return;
+  }
+
   fetchWithAuth('/api/events?favorite=1&sort=score&order=desc')
     .then(r => r.json())
     .then(favs => {
-      renderFavoritesGrid(Array.isArray(favs) ? favs : []);
+      if (Array.isArray(favs)) {
+        renderFavoritesGrid(favs);
+      } else {
+        const f = state.events.filter(e => e.favorite === 1 || e.favorite === true);
+        renderFavoritesGrid(f);
+      }
+    })
+    .catch(() => {
+      const f = state.events.filter(e => e.favorite === 1 || e.favorite === true);
+      renderFavoritesGrid(f);
     });
 }
 
@@ -989,7 +1435,13 @@ function handleLocationSubmit(e) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   })
-    .then(r => r.json())
+    .then(r => {
+      if (r.status === 404 || r.status === 405) {
+        // Fallback to client-side store
+        return handleClientLocationSave(id, payload);
+      }
+      return r.json();
+    })
     .then(data => {
       closeModal('modal-location');
       showToast(id ? 'Location updated successfully' : 'Location created successfully!', 'success');
@@ -998,9 +1450,32 @@ function handleLocationSubmit(e) {
         map.flyTo([lat, lng], 14);
       }
     })
-    .catch(err => {
-      showToast('Error saving location: ' + err.message, 'error');
+    .catch(() => {
+      handleClientLocationSave(id, payload).then(() => {
+        closeModal('modal-location');
+        showToast('Location saved locally!', 'success');
+        loadAllData();
+      });
     });
+}
+
+function handleClientLocationSave(id, payload) {
+  const uid = state.currentUser.id;
+  let locs = ClientDB.getLocations(uid);
+  if (id) {
+    locs = locs.map(l => l.id === id ? { ...l, ...payload, updated_at: Date.now() } : l);
+  } else {
+    const newLoc = {
+      id: `loc_${Date.now()}`,
+      user_id: uid,
+      ...payload,
+      created_at: Date.now(),
+      updated_at: Date.now()
+    };
+    locs.push(newLoc);
+  }
+  ClientDB.saveLocations(locs, uid);
+  return Promise.resolve();
 }
 
 function setCurrentGpsLocation() {
@@ -1050,32 +1525,42 @@ function openAddEventModal(locationId = null) {
 }
 
 function editEvent(id) {
-  fetchWithAuth(`/api/events/${id}`)
-    .then(r => r.json())
-    .then(evt => {
-      document.getElementById('event-modal-title').innerHTML = `<i data-lucide="edit-3" class="w-5 h-5 text-brand-400"></i> Edit Event`;
-      document.getElementById('evt-input-id').value = evt.id;
-      document.getElementById('evt-input-location-id').value = evt.location_id;
-      document.getElementById('evt-input-name').value = evt.name;
-      document.getElementById('evt-input-date').value = evt.date.slice(0, 16);
-      document.getElementById('evt-input-description').value = evt.description || '';
-      document.getElementById('evt-input-score').value = evt.score;
-      document.getElementById('score-display-val').innerText = Number(evt.score).toFixed(1);
-      document.getElementById('evt-input-favorite').checked = evt.favorite === 1;
+  const evt = state.events.find(e => e.id === id);
+  if (!evt) return;
 
-      if (evt.photo_url) {
-        setPhotoPreview(evt.photo_url);
-      } else {
-        removeSelectedPhoto();
-      }
+  document.getElementById('event-modal-title').innerHTML = `<i data-lucide="edit-3" class="w-5 h-5 text-brand-400"></i> Edit Event`;
+  document.getElementById('evt-input-id').value = evt.id;
+  document.getElementById('evt-input-location-id').value = evt.location_id;
+  document.getElementById('evt-input-name').value = evt.name;
+  document.getElementById('evt-input-date').value = (evt.date || '').slice(0, 16);
+  document.getElementById('evt-input-description').value = evt.description || '';
+  document.getElementById('evt-input-score').value = evt.score;
+  document.getElementById('score-display-val').innerText = Number(evt.score).toFixed(1);
+  document.getElementById('evt-input-favorite').checked = evt.favorite === 1 || evt.favorite === true;
 
-      openModal('modal-event');
-    });
+  if (evt.photo_url) {
+    setPhotoPreview(evt.photo_url);
+  } else {
+    removeSelectedPhoto();
+  }
+
+  openModal('modal-event');
 }
 
 function handlePhotoFileSelected(input) {
   if (!input.files || !input.files[0]) return;
   const file = input.files[0];
+
+  // If running on static host (GitHub Pages), convert to compact Data URL
+  if (state.isStandaloneClient || location.hostname.includes('github.io')) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setPhotoPreview(e.target.result);
+      showToast('Photo attached!', 'success');
+    };
+    reader.readAsDataURL(file);
+    return;
+  }
 
   const formData = new FormData();
   formData.append('photo', file);
@@ -1092,11 +1577,16 @@ function handlePhotoFileSelected(input) {
         setPhotoPreview(data.url);
         showToast('Photo uploaded successfully!', 'success');
       } else {
-        showToast('Upload failed: ' + data.error, 'error');
+        // Fallback to data URL
+        const reader = new FileReader();
+        reader.onload = (e) => setPhotoPreview(e.target.result);
+        reader.readAsDataURL(file);
       }
     })
-    .catch(err => {
-      showToast('Error uploading photo: ' + err.message, 'error');
+    .catch(() => {
+      const reader = new FileReader();
+      reader.onload = (e) => setPhotoPreview(e.target.result);
+      reader.readAsDataURL(file);
     });
 }
 
@@ -1148,8 +1638,13 @@ function handleEventSubmit(e) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   })
-    .then(r => r.json())
-    .then(data => {
+    .then(r => {
+      if (r.status === 404 || r.status === 405) {
+        return handleClientEventSave(id, payload);
+      }
+      return r.json();
+    })
+    .then(() => {
       closeModal('modal-event');
       showToast(id ? 'Event updated!' : 'Event logged successfully! ⭐', 'success');
       loadAllData();
@@ -1157,50 +1652,117 @@ function handleEventSubmit(e) {
         openLocationDrawer(state.selectedLocation);
       }
     })
-    .catch(err => {
-      showToast('Error saving event: ' + err.message, 'error');
+    .catch(() => {
+      handleClientEventSave(id, payload).then(() => {
+        closeModal('modal-event');
+        showToast('Event saved locally! ⭐', 'success');
+        loadAllData();
+      });
     });
+}
+
+function handleClientEventSave(id, payload) {
+  const uid = state.currentUser.id;
+  let evts = ClientDB.getEvents(uid);
+  if (id) {
+    evts = evts.map(e => e.id === id ? { ...e, ...payload, updated_at: Date.now() } : e);
+  } else {
+    const newEvt = {
+      id: `evt_${Date.now()}`,
+      user_id: uid,
+      ...payload,
+      created_at: Date.now(),
+      updated_at: Date.now()
+    };
+    evts.push(newEvt);
+  }
+  ClientDB.saveEvents(evts, uid);
+  return Promise.resolve();
 }
 
 function toggleFavorite(id, e) {
   if (e) e.stopPropagation();
   fetchWithAuth(`/api/events/${id}/favorite`, { method: 'POST' })
-    .then(r => r.json())
+    .then(r => {
+      if (r.status === 404 || r.status === 405) {
+        return toggleClientFavorite(id);
+      }
+      return r.json();
+    })
     .then(res => {
-      showToast(res.favorite ? 'Added to favorites! ⭐' : 'Removed from favorites', 'info');
+      showToast(res && res.favorite ? 'Added to favorites! ⭐' : 'Removed from favorites', 'info');
       loadAllData();
+    })
+    .catch(() => {
+      toggleClientFavorite(id).then(res => {
+        showToast(res.favorite ? 'Added to favorites! ⭐' : 'Removed from favorites', 'info');
+        loadAllData();
+      });
     });
+}
+
+function toggleClientFavorite(id) {
+  const uid = state.currentUser.id;
+  let evts = ClientDB.getEvents(uid);
+  let newFav = 1;
+  evts = evts.map(e => {
+    if (e.id === id) {
+      newFav = (e.favorite === 1 || e.favorite === true) ? 0 : 1;
+      return { ...e, favorite: newFav };
+    }
+    return e;
+  });
+  ClientDB.saveEvents(evts, uid);
+  return Promise.resolve({ favorite: newFav });
 }
 
 function deleteEvent(id) {
   if (!confirm('Are you sure you want to delete this event?')) return;
   fetchWithAuth(`/api/events/${id}`, { method: 'DELETE' })
-    .then(r => r.json())
-    .then(res => {
+    .then(r => {
+      if (r.status === 404 || r.status === 405) {
+        return deleteClientEvent(id);
+      }
+      return r.json();
+    })
+    .then(() => {
       showToast('Event deleted', 'info');
       loadAllData();
+    })
+    .catch(() => {
+      deleteClientEvent(id).then(() => {
+        showToast('Event deleted', 'info');
+        loadAllData();
+      });
     });
+}
+
+function deleteClientEvent(id) {
+  const uid = state.currentUser.id;
+  let evts = ClientDB.getEvents(uid);
+  evts = evts.filter(e => e.id !== id);
+  ClientDB.saveEvents(evts, uid);
+  return Promise.resolve();
 }
 
 // ==========================================
 // SHARING LOGIC & LIGHTBOX
 // ==========================================
 function openShareModal(eventId) {
-  fetchWithAuth(`/api/events/${eventId}`)
-    .then(r => r.json())
-    .then(evt => {
-      state.activeShareEvent = evt;
-      document.getElementById('share-title').innerText = evt.name;
-      document.getElementById('share-loc').innerText = `📍 ${evt.location_name}`;
-      document.getElementById('share-score').innerText = Number(evt.score).toFixed(1);
-      document.getElementById('share-desc').innerText = evt.description || 'No notes added.';
-      document.getElementById('share-date').innerText = formatDate(evt.date);
-      
-      const img = document.getElementById('share-img');
-      img.src = evt.photo_url || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80';
+  const evt = state.events.find(e => e.id === eventId);
+  if (!evt) return;
 
-      openModal('modal-share');
-    });
+  state.activeShareEvent = evt;
+  document.getElementById('share-title').innerText = evt.name;
+  document.getElementById('share-loc').innerText = `📍 ${evt.location_name || 'Location'}`;
+  document.getElementById('share-score').innerText = Number(evt.score).toFixed(1);
+  document.getElementById('share-desc').innerText = evt.description || 'No notes added.';
+  document.getElementById('share-date').innerText = formatDate(evt.date);
+  
+  const img = document.getElementById('share-img');
+  img.src = evt.photo_url || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80';
+
+  openModal('modal-share');
 }
 
 function triggerNativeShare() {
@@ -1223,7 +1785,7 @@ function triggerNativeShare() {
 function copyShareText() {
   const evt = state.activeShareEvent;
   if (!evt) return;
-  const text = `📍 ${evt.name} (${evt.location_name})\n⭐ Score: ${Number(evt.score).toFixed(1)}/10\n📅 Date: ${formatDate(evt.date)}\n📝 "${evt.description || ''}"\nLogged on AL`;
+  const text = `📍 ${evt.name} (${evt.location_name || 'Spot'})\n⭐ Score: ${Number(evt.score).toFixed(1)}/10\n📅 Date: ${formatDate(evt.date)}\n📝 "${evt.description || ''}"\nLogged on AL`;
   navigator.clipboard.writeText(text).then(() => {
     showToast('Summary copied to clipboard!', 'success');
   });
@@ -1241,47 +1803,50 @@ function openLightbox(url, caption) {
 // EXPORTS (JSON & CSV)
 // ==========================================
 function exportDataJSON() {
-  fetchWithAuth('/api/export')
-    .then(r => r.json())
-    .then(data => {
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `AL_Export_${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('JSON export downloaded!', 'success');
-    });
+  const uid = state.currentUser ? state.currentUser.id : null;
+  const data = {
+    app: 'AL',
+    version: '1.0.0',
+    user: state.currentUser ? state.currentUser.username : 'Guest',
+    exported_at: new Date().toISOString(),
+    locations: state.locations,
+    events: state.events
+  };
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `AL_Export_${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('JSON export downloaded!', 'success');
 }
 
 function exportEventsCSV() {
-  fetchWithAuth('/api/events')
-    .then(r => r.json())
-    .then(events => {
-      const headers = ['ID', 'Event Name', 'Location', 'Category', 'Date', 'Score', 'Favorite', 'Description', 'Photo URL'];
-      const rows = events.map(e => [
-        `"${e.id}"`,
-        `"${escapeCsv(e.name)}"`,
-        `"${escapeCsv(e.location_name)}"`,
-        `"${escapeCsv(e.location_category)}"`,
-        `"${e.date}"`,
-        e.score,
-        e.favorite ? 'Yes' : 'No',
-        `"${escapeCsv(e.description || '')}"`,
-        `"${e.photo_url || ''}"`
-      ]);
+  const events = state.events;
+  const headers = ['ID', 'Event Name', 'Location', 'Category', 'Date', 'Score', 'Favorite', 'Description', 'Photo URL'];
+  const rows = events.map(e => [
+    `"${e.id}"`,
+    `"${escapeCsv(e.name)}"`,
+    `"${escapeCsv(e.location_name)}"`,
+    `"${escapeCsv(e.location_category || '')}"`,
+    `"${e.date}"`,
+    e.score,
+    e.favorite ? 'Yes' : 'No',
+    `"${escapeCsv(e.description || '')}"`,
+    `"${e.photo_url || ''}"`
+  ]);
 
-      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `AL_Events_${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showToast('CSV export downloaded!', 'success');
-    });
+  const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `AL_Events_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV export downloaded!', 'success');
 }
 
 // ==========================================
