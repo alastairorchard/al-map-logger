@@ -340,13 +340,16 @@ async function deleteEventAudio(eventId) {
   if (!evt) return;
 
   evt.audio_url = '';
-  if (evt.tags && typeof evt.tags === 'string') {
-    evt.tags = evt.tags.replace(/audio_data:[^\s]+/, '').trim();
-  }
+  let cleanTags = (evt.tags || '').replace(/audio_data:[^\s]+/g, '').trim();
+  evt.tags = cleanTags;
 
   if (state.supabase) {
     showToast('Deleting voice note...', 'info');
-    await state.supabase.from('events').update({ audio_url: '', tags: evt.tags || '' }).eq('id', eventId);
+    await state.supabase.from('events').update({ tags: cleanTags }).eq('id', eventId);
+    try {
+      await state.supabase.from('events').update({ audio_url: null }).eq('id', eventId);
+    } catch (e) {}
+
     showToast('Voice note deleted! 🗑️', 'info');
     loadAllData();
     return;
@@ -354,7 +357,7 @@ async function deleteEventAudio(eventId) {
 
   const uid = state.currentUser ? state.currentUser.id : null;
   let evts = ClientDB.getEvents(uid);
-  evts = evts.map(e => e.id === eventId ? { ...e, audio_url: '', tags: evt.tags || '' } : e);
+  evts = evts.map(e => e.id === eventId ? { ...e, audio_url: '', tags: cleanTags } : e);
   ClientDB.saveEvents(evts, uid);
   showToast('Voice note deleted! 🗑️', 'info');
   loadAllData();
@@ -2489,43 +2492,34 @@ function handleEventSubmit(e) {
   const photo_url = JSON.stringify(state.modalPhotos);
   const audio_url = state.modalAudio || '';
 
-  let tags = '';
-  if (audio_url) {
-    tags = `audio_data:${audio_url}`;
-  }
+  const existingEvt = id ? state.events.find(ev => ev.id === id) : null;
+  let cleanTags = existingEvt && existingEvt.tags ? existingEvt.tags.replace(/audio_data:[^\s]+/g, '').trim() : '';
+  let tags = audio_url ? `${cleanTags} audio_data:${audio_url}`.trim() : cleanTags;
 
-  const payload = { location_id, name, date, score, description, photo_url, audio_url, tags, favorite };
+  const payload = { location_id, name, date, score, description, photo_url, tags, favorite };
 
   if (state.supabase) {
     const evtId = id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    state.supabase.from('events').upsert({ id: evtId, ...payload, user_id: state.currentUser.id }).then(({ data, error }) => {
+    state.supabase.from('events').upsert({ id: evtId, ...payload, user_id: state.currentUser.id }).then(async ({ data, error }) => {
       if (error) {
-        if (error.message && error.message.includes('audio_url')) {
-          delete payload.audio_url;
-          state.supabase.from('events').upsert({ id: evtId, ...payload, user_id: state.currentUser.id }).then(() => {
-            closeModal('modal-event');
-            showToast('Event & voice note saved to Cloud! ⭐', 'success');
-            loadAllData();
-            if (state.selectedLocation && state.selectedLocation.id === location_id) {
-              openLocationDrawer(state.selectedLocation);
-            }
-          });
-          return;
-        }
         showToast(error.message, 'error');
-      } else {
-        closeModal('modal-event');
-        showToast('Event & voice note saved to Cloud! ⭐', 'success');
-        loadAllData();
-        if (state.selectedLocation && state.selectedLocation.id === location_id) {
-          openLocationDrawer(state.selectedLocation);
-        }
+        return;
+      }
+      try {
+        await state.supabase.from('events').update({ audio_url: audio_url || null }).eq('id', evtId);
+      } catch (err) {}
+
+      closeModal('modal-event');
+      showToast('Event & voice note saved! ⭐', 'success');
+      loadAllData();
+      if (state.selectedLocation && state.selectedLocation.id === location_id) {
+        openLocationDrawer(state.selectedLocation);
       }
     });
     return;
   }
 
-  handleClientEventSave(id, payload).then(() => {
+  handleClientEventSave(id, { ...payload, audio_url }).then(() => {
     closeModal('modal-event');
     showToast('Event saved! ⭐', 'success');
     loadAllData();
