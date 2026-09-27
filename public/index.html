@@ -59,26 +59,18 @@
   <!-- Supabase Cloud Client (Local) -->
   <script src="./vendor/supabase.js"></script>
 
-  <link rel="stylesheet" href="./styles.css?v=20">
+  <link rel="stylesheet" href="./styles.css?v=25">
 </head>
 <body class="bg-dark-900 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
-  <!-- TOP APP HEADER -->
+  <!-- TOP APP HEADER (Clean Minimal Header) -->
   <header class="sticky top-0 z-40 bg-dark-800/90 backdrop-blur-md border-b border-slate-800 px-4 lg:px-8 py-3 transition-all">
     <div class="max-w-7xl mx-auto flex items-center justify-between">
       
-      <!-- LOGO & BRAND -->
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 via-brand-500 to-accent-500 flex items-center justify-center shadow-lg shadow-brand-500/25 ring-1 ring-white/20 font-black text-xl tracking-wider text-white cursor-pointer" onclick="switchTab('map')">
+      <!-- CLEAN LOGO ON THE LEFT -->
+      <div class="flex items-center">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 via-brand-500 to-accent-500 flex items-center justify-center shadow-lg shadow-brand-500/25 ring-1 ring-white/20 font-black text-xl tracking-wider text-white cursor-pointer hover:scale-105 transition active:scale-95" onclick="switchTab('map')" title="AL Map Logger">
           AL
-        </div>
-        <div>
-          <div class="flex items-center gap-2">
-            <h1 class="font-bold text-lg leading-tight tracking-tight text-white flex items-center gap-1.5 cursor-pointer" onclick="switchTab('map')">
-              AL <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-medium border border-brand-500/30">Map Logger</span>
-            </h1>
-          </div>
-          <p class="text-xs text-slate-400 hidden sm:block">Private spots, scored events & visual maps</p>
         </div>
       </div>
 
@@ -86,6 +78,9 @@
       <nav class="hidden md:flex items-center gap-1 bg-dark-900/80 p-1.5 rounded-xl border border-slate-800">
         <button onclick="switchTab('map')" id="nav-btn-map" class="nav-tab active flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-white bg-brand-600 shadow">
           <i data-lucide="map" class="w-4 h-4"></i> Map
+        </button>
+        <button onclick="switchTab('gallery')" id="nav-btn-gallery" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
+          <i data-lucide="image" class="w-4 h-4"></i> Gallery
         </button>
         <button onclick="switchTab('events')" id="nav-btn-events" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
           <i data-lucide="list" class="w-4 h-4"></i> Events Table
@@ -96,12 +91,9 @@
         <button onclick="switchTab('favorites')" id="nav-btn-favorites" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
           <i data-lucide="star" class="w-4 h-4 text-amber-400"></i> Favorites
         </button>
-        <button onclick="switchTab('profile')" id="nav-btn-profile" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all text-slate-400 hover:text-white hover:bg-slate-800/60">
-          <i data-lucide="user" class="w-4 h-4"></i> Account
-        </button>
       </nav>
 
-      <!-- USER PROFILE & TOP ACTIONS -->
+      <!-- TOP ACTIONS & USER BADGE (Clickable to Account) -->
       <div class="flex items-center gap-2">
         <button onclick="openAddLocationModal()" class="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium bg-dark-700 hover:bg-dark-600 text-slate-200 border border-slate-700 transition">
           <i data-lucide="map-pin" class="w-4 h-4 text-accent-400"></i>
@@ -113,8 +105,8 @@
           <span>Log Event</span>
         </button>
 
-        <!-- USER BADGE / SIGN IN BUTTON -->
-        <div id="user-header-container" class="ml-2 pl-2 border-l border-slate-700/80 flex items-center gap-2">
+        <!-- USER BADGE (CLICK OPENS ACCOUNT VIEW) -->
+        <div id="user-header-container" class="ml-1 flex items-center">
           <!-- Populated via JS -->
         </div>
       </div>
@@ -216,7 +208,43 @@
 
     </section>
 
-    <!-- 2. EVENTS TABLE TAB -->
+    <!-- 2. GALLERY TAB (INSTAGRAM-STYLE PHOTO FEED RANKED BY SCORE) -->
+    <section id="tab-gallery" class="tab-content hidden max-w-2xl mx-auto w-full px-4 sm:px-6 py-6 flex-1">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+            <i data-lucide="image" class="w-6 h-6 text-brand-400"></i> Visual Photo Feed
+          </h2>
+          <p class="text-xs text-slate-400">Instagram-style photo feed ranked by experience score.</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <select id="gallery-sort-filter" class="bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500 shadow" onchange="loadGalleryFeed()">
+            <option value="score_desc">⭐ Top Rated First</option>
+            <option value="date_desc">📅 Newest Date First</option>
+            <option value="score_asc">⭐ Lowest Score First</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- INSTAGRAM FEED CONTAINER -->
+      <div id="gallery-feed-container" class="space-y-8">
+        <!-- Rendered via JS -->
+      </div>
+
+      <div id="gallery-empty-state" class="hidden p-16 text-center bg-dark-800 rounded-3xl border border-slate-800">
+        <div class="w-16 h-16 rounded-full bg-brand-500/10 text-brand-400 flex items-center justify-center mx-auto mb-4">
+          <i data-lucide="camera" class="w-8 h-8"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-1">No photos logged yet</h3>
+        <p class="text-xs text-slate-400 max-w-sm mx-auto mb-4">Log an event and attach photos to see your visual Instagram-style gallery feed here.</p>
+        <button onclick="openAddEventModal()" class="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold shadow-lg shadow-brand-600/30">
+          Log First Event
+        </button>
+      </div>
+    </section>
+
+    <!-- 3. EVENTS TABLE TAB -->
     <section id="tab-events" class="tab-content hidden max-w-7xl mx-auto w-full px-4 lg:px-8 py-6 flex-1 flex flex-col">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
@@ -308,7 +336,7 @@
       </div>
     </section>
 
-    <!-- 3. KPIS & ANALYTICS TAB -->
+    <!-- 4. KPIS & ANALYTICS TAB -->
     <section id="tab-kpis" class="tab-content hidden max-w-7xl mx-auto w-full px-4 lg:px-8 py-6 flex-1">
       <div class="mb-6">
         <h2 class="text-2xl font-bold text-white tracking-tight">Analytics & Key Performance Indicators</h2>
@@ -477,7 +505,7 @@
 
     </section>
 
-    <!-- 4. FAVORITES TAB -->
+    <!-- 5. FAVORITES TAB -->
     <section id="tab-favorites" class="tab-content hidden max-w-7xl mx-auto w-full px-4 lg:px-8 py-6 flex-1">
       <div class="mb-6 flex items-center justify-between">
         <div>
@@ -497,25 +525,25 @@
           <i data-lucide="star" class="w-8 h-8"></i>
         </div>
         <h3 class="text-lg font-bold text-white mb-1">No favorite events yet</h3>
-        <p class="text-xs text-slate-400 max-w-sm mx-auto mb-4">Click the star icon on any event in the Map or Events table to bookmark your favorites here.</p>
+        <p class="text-xs text-slate-400 max-w-sm mx-auto mb-4">Click the star icon on any event in the Map, Gallery, or Events table to bookmark your favorites here.</p>
       </div>
     </section>
 
-    <!-- 5. ACCOUNT / PROFILE TAB -->
-    <section id="tab-profile" class="tab-content hidden max-w-3xl mx-auto w-full px-4 lg:px-8 py-6 flex-1">
+    <!-- 6. ACCOUNT / PROFILE TAB -->
+    <section id="tab-profile" class="tab-content hidden max-w-2xl mx-auto w-full px-4 sm:px-6 py-6 flex-1">
       <div class="mb-6">
         <h2 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-          <i data-lucide="user-check" class="w-6 h-6 text-brand-400"></i> Account & Cloud Sync
+          <i data-lucide="user" class="w-6 h-6 text-brand-400"></i> My Account & Sync
         </h2>
-        <p class="text-sm text-slate-400">Manage your session, password, and multi-device cloud synchronization.</p>
+        <p class="text-xs text-slate-400">Manage your profile, password, and multi-device cloud synchronization.</p>
       </div>
 
       <div class="space-y-6">
         <!-- USER INFO CARD -->
         <div class="bg-dark-800 p-6 rounded-3xl border border-slate-700/80 shadow-xl">
-          <div class="flex items-center justify-between pb-4 border-b border-slate-700 mb-4">
-            <div class="flex items-center gap-3">
-              <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-accent-500 text-white font-black text-lg flex items-center justify-center shadow-lg shadow-brand-500/20" id="profile-avatar-initials">
+          <div class="flex items-center justify-between pb-5 border-b border-slate-700 mb-5">
+            <div class="flex items-center gap-3.5">
+              <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-accent-500 text-white font-black text-xl flex items-center justify-center shadow-lg shadow-brand-500/20" id="profile-avatar-initials">
                 AL
               </div>
               <div>
@@ -524,42 +552,44 @@
               </div>
             </div>
             <span class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Signed In
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Online
             </span>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+          <!-- ACTIONS GRID -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button onclick="openChangePasswordModal()" class="py-3 px-4 rounded-2xl bg-dark-700 hover:bg-dark-600 text-slate-200 text-xs font-bold border border-slate-600 flex items-center justify-center gap-2 transition">
               <i data-lucide="key" class="w-4 h-4 text-accent-400"></i> Change Password
             </button>
             <button onclick="logout(true)" class="py-3 px-4 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30 flex items-center justify-center gap-2 transition">
-              <i data-lucide="log-out" class="w-4 h-4"></i> Sign Out
+              <i data-lucide="log-out" class="w-4 h-4"></i> Sign Out of this Device
             </button>
           </div>
         </div>
 
-        <!-- CLOUD RECOVERY & SYNC TOOL -->
+        <!-- CLOUD STATUS CARD -->
         <div class="bg-dark-800 p-6 rounded-3xl border border-slate-700/80 shadow-xl">
           <div class="flex items-center justify-between mb-2">
-            <h4 class="font-bold text-white text-base flex items-center gap-2">
-              <i data-lucide="cloud-upload" class="w-5 h-5 text-accent-400"></i> Sync & Recover Local Data to Cloud
+            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+              <i data-lucide="cloud-check" class="w-5 h-5 text-emerald-400"></i> Supabase Cloud Status
             </h4>
+            <span class="text-xs text-emerald-400 font-semibold">Active & Connected</span>
           </div>
           <p class="text-xs text-slate-400 mb-4 leading-relaxed">
-            If you created locations or events offline or on another browser session, click below to upload all your stored events into your Supabase Cloud Database.
+            All your locations, photos, and ratings are automatically backed up and synced in real-time across your iPhone, MacBook, and iPad.
           </p>
           <button onclick="triggerManualDataMigration()" class="w-full py-3 rounded-2xl bg-gradient-to-r from-accent-600 to-brand-600 hover:opacity-90 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-brand-500/20 transition">
-            <i data-lucide="refresh-cw" class="w-4 h-4"></i> Upload & Sync Local Events to Supabase
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i> Sync / Upload Local Offline Data to Cloud
           </button>
         </div>
 
-        <!-- EXPORT ALL DATA -->
+        <!-- EXPORT DATA -->
         <div class="bg-dark-800 p-6 rounded-3xl border border-slate-700/80 shadow-xl flex items-center justify-between flex-wrap gap-3">
           <div>
             <h4 class="font-bold text-white text-sm flex items-center gap-1.5">
               <i data-lucide="download" class="w-4 h-4 text-brand-400"></i> Data Backup & Export
             </h4>
-            <p class="text-xs text-slate-400">Download a full JSON or CSV backup of all your logged spots.</p>
+            <p class="text-xs text-slate-400">Download a full JSON or CSV export of all your logged spots.</p>
           </div>
           <div class="flex items-center gap-2">
             <button onclick="exportDataJSON()" class="px-3.5 py-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-200 text-xs font-semibold border border-slate-600">
@@ -581,9 +611,9 @@
       <i data-lucide="map" class="w-5 h-5"></i>
       <span>Map</span>
     </button>
-    <button onclick="switchTab('events')" id="mobile-nav-events" class="flex flex-col items-center gap-1 text-slate-400 text-[10px] font-medium py-1">
-      <i data-lucide="list" class="w-5 h-5"></i>
-      <span>Events</span>
+    <button onclick="switchTab('gallery')" id="mobile-nav-gallery" class="flex flex-col items-center gap-1 text-slate-400 text-[10px] font-medium py-1">
+      <i data-lucide="image" class="w-5 h-5"></i>
+      <span>Gallery</span>
     </button>
     <button onclick="openAddEventModal()" class="flex flex-col items-center gap-1 -mt-5">
       <div class="w-12 h-12 rounded-full bg-gradient-to-tr from-brand-600 to-accent-500 flex items-center justify-center shadow-lg shadow-brand-500/40 text-white">
@@ -591,9 +621,9 @@
       </div>
       <span class="text-[10px] text-slate-300 font-semibold">Log</span>
     </button>
-    <button onclick="switchTab('kpis')" id="mobile-nav-kpis" class="flex flex-col items-center gap-1 text-slate-400 text-[10px] font-medium py-1">
-      <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
-      <span>KPIs</span>
+    <button onclick="switchTab('events')" id="mobile-nav-events" class="flex flex-col items-center gap-1 text-slate-400 text-[10px] font-medium py-1">
+      <i data-lucide="list" class="w-5 h-5"></i>
+      <span>Events</span>
     </button>
     <button onclick="switchTab('profile')" id="mobile-nav-profile" class="flex flex-col items-center gap-1 text-slate-400 text-[10px] font-medium py-1">
       <i data-lucide="user" class="w-5 h-5"></i>
@@ -686,7 +716,7 @@
           <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Email Address *</label>
           <div class="relative">
             <i data-lucide="mail" class="w-4 h-4 text-slate-500 absolute left-3 top-3"></i>
-            <input type="email" id="auth-input-email" required placeholder="you@example.com" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
+            <input type="email" id="auth-input-email" required placeholder="name@example.com" class="w-full bg-dark-900 border border-slate-700 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500 transition">
           </div>
         </div>
 
@@ -895,7 +925,7 @@
             </div>
             
             <div class="flex items-center gap-2">
-              <input type="text" id="evt-input-photo-url" placeholder="Or paste an image web URL and click Add" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition" onkeydown="if(event.key==='Enter'){event.preventDefault();addPhotoUrlFromInput();}">
+              <input type="text" id="evt-input-photo-url" placeholder="Or paste an image web URL and press Add" class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 transition" onkeydown="if(event.key==='Enter'){event.preventDefault();addPhotoUrlFromInput();}">
               <button type="button" onclick="addPhotoUrlFromInput()" class="px-3 py-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-xs text-slate-200 font-semibold border border-slate-600 shrink-0">
                 Add URL
               </button>
@@ -955,7 +985,7 @@
         <div class="p-4">
           <h4 id="share-title" class="text-lg font-bold text-white mb-1">Event Title</h4>
           <p id="share-loc" class="text-xs text-brand-300 font-medium mb-2 flex items-center gap-1">
-            <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> Location
+            <i data-lucide="map-pin" class="w-3 h-3"></i> Location
           </p>
           <p id="share-desc" class="text-xs text-slate-300 line-clamp-2 italic mb-2">Description...</p>
           <p id="share-date" class="text-[11px] text-slate-500">Date</p>
@@ -977,27 +1007,22 @@
   <!-- MODAL: HIGH-RES PHOTO LIGHTBOX WITH CAROUSEL -->
   <div id="modal-lightbox" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-lg hidden flex items-center justify-center p-4 select-none" onclick="closeModal('modal-lightbox')">
     <div class="relative max-w-5xl w-full max-h-[95vh] flex flex-col items-center justify-center" onclick="event.stopPropagation()">
-      <!-- Close Button -->
       <button onclick="closeModal('modal-lightbox')" class="absolute top-2 right-2 md:-top-10 md:right-0 p-2 rounded-full bg-dark-800/80 hover:bg-dark-700 text-white z-20 transition">
         <i data-lucide="x" class="w-6 h-6"></i>
       </button>
 
-      <!-- Previous Arrow -->
       <button id="lightbox-prev-btn" onclick="lightboxNav(-1)" class="absolute left-2 md:-left-12 top-1/2 -translate-y-1/2 p-3 rounded-full bg-dark-800/80 hover:bg-dark-700 text-white shadow-xl z-20 transition">
         <i data-lucide="chevron-left" class="w-6 h-6"></i>
       </button>
 
-      <!-- Next Arrow -->
       <button id="lightbox-next-btn" onclick="lightboxNav(1)" class="absolute right-2 md:-right-12 top-1/2 -translate-y-1/2 p-3 rounded-full bg-dark-800/80 hover:bg-dark-700 text-white shadow-xl z-20 transition">
         <i data-lucide="chevron-right" class="w-6 h-6"></i>
       </button>
 
-      <!-- Main Image -->
       <div class="w-full flex items-center justify-center max-h-[80vh] overflow-hidden rounded-2xl">
         <img id="lightbox-img" src="" alt="Full view" class="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl">
       </div>
 
-      <!-- Caption & Counter -->
       <div class="flex items-center justify-between w-full max-w-lg mt-3 px-2 text-xs text-slate-300">
         <span id="lightbox-caption" class="font-bold text-white truncate">Event Caption</span>
         <span id="lightbox-counter" class="px-2.5 py-0.5 rounded-full bg-dark-800 text-slate-400 font-semibold border border-slate-700">1 of 1</span>
@@ -1008,6 +1033,6 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <script src="./app.js?v=80"></script>
+  <script src="./app.js?v=99"></script>
 </body>
 </html>

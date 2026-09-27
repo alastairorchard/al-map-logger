@@ -1,13 +1,7 @@
-// AL - Map & Event Logger (Multi-Photo Instagram Carousel, Multi-User Cloud Sync)
+// AL - Map & Event Logger (Instagram-Style Visual Gallery, Multi-User Cloud Sync)
 
 const DEFAULT_SUPABASE_URL = 'https://bfwlzobdpbuippfbbjud.supabase.co';
 const DEFAULT_SUPABASE_KEY = 'sb_publishable_PcDpOFZptvEbE0wL8qDyLA_uqqkkf0A';
-
-// Clear legacy broken storage keys on startup
-try {
-  localStorage.removeItem('al_supabase_key');
-  localStorage.removeItem('al_supabase_url');
-} catch (e) {}
 
 // State Management
 let state = {
@@ -31,7 +25,7 @@ let state = {
     url: DEFAULT_SUPABASE_URL,
     key: DEFAULT_SUPABASE_KEY
   },
-  modalPhotos: [], // Temporary photos array during event creation/editing
+  modalPhotos: [],
   lightbox: {
     photos: [],
     currentIndex: 0,
@@ -114,10 +108,10 @@ function renderInstagramCarousel(photos, evtName, heightClass = 'h-52') {
 
   if (photos.length === 1) {
     return `
-      <div class="${heightClass} rounded-2xl overflow-hidden relative group cursor-pointer bg-dark-950 border border-slate-700/60" onclick="openLightboxCarousel(${photosJson}, 0, '${escapeHtml(evtName)}')">
+      <div class="${heightClass} rounded-3xl overflow-hidden relative group cursor-pointer bg-dark-950 border border-slate-700/60 shadow-inner" onclick="openLightboxCarousel(${photosJson}, 0, '${escapeHtml(evtName)}')">
         <img src="${escapeHtml(photos[0])}" alt="${escapeHtml(evtName)}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
         <div class="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
-          <i data-lucide="maximize-2" class="w-6 h-6 text-white drop-shadow"></i>
+          <i data-lucide="maximize-2" class="w-7 h-7 text-white drop-shadow"></i>
         </div>
       </div>
     `;
@@ -126,7 +120,7 @@ function renderInstagramCarousel(photos, evtName, heightClass = 'h-52') {
   const carouselId = `car_${Math.random().toString(36).slice(2, 8)}`;
 
   return `
-    <div class="${heightClass} rounded-2xl overflow-hidden relative group bg-dark-950 border border-slate-700/60 select-none">
+    <div class="${heightClass} rounded-3xl overflow-hidden relative group bg-dark-950 border border-slate-700/60 shadow-inner select-none">
       <!-- Horizontal Scroll Track with Snap -->
       <div id="${carouselId}" class="flex overflow-x-auto snap-x snap-mandatory scrollbar-none scroll-smooth w-full h-full" onscroll="handleCarouselScroll('${carouselId}', ${photos.length})">
         ${photos.map((url, idx) => `
@@ -137,23 +131,23 @@ function renderInstagramCarousel(photos, evtName, heightClass = 'h-52') {
       </div>
 
       <!-- Left Arrow Button (Desktop hover) -->
-      <button type="button" onclick="event.stopPropagation(); scrollCarousel('${carouselId}', -1)" class="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition shadow-lg z-10">
-        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+      <button type="button" onclick="event.stopPropagation(); scrollCarousel('${carouselId}', -1)" class="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition shadow-xl z-10">
+        <i data-lucide="chevron-left" class="w-5 h-5"></i>
       </button>
 
       <!-- Right Arrow Button (Desktop hover) -->
-      <button type="button" onclick="event.stopPropagation(); scrollCarousel('${carouselId}', 1)" class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition shadow-lg z-10">
-        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+      <button type="button" onclick="event.stopPropagation(); scrollCarousel('${carouselId}', 1)" class="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition shadow-xl z-10">
+        <i data-lucide="chevron-right" class="w-5 h-5"></i>
       </button>
 
       <!-- Multi-photo count badge -->
-      <div class="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full bg-black/75 backdrop-blur-md text-[10px] font-bold text-white flex items-center gap-1 border border-white/20 z-10 pointer-events-none">
-        <i data-lucide="layers" class="w-3 h-3 text-brand-300"></i>
+      <div class="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md text-xs font-bold text-white flex items-center gap-1.5 border border-white/20 z-10 pointer-events-none">
+        <i data-lucide="layers" class="w-3.5 h-3.5 text-brand-300"></i>
         <span>1 / ${photos.length}</span>
       </div>
 
       <!-- Instagram Pagination Dots -->
-      <div id="${carouselId}-dots" class="absolute bottom-2.5 left-0 right-0 flex justify-center items-center gap-1.5 pointer-events-none z-10">
+      <div id="${carouselId}-dots" class="absolute bottom-3 left-0 right-0 flex justify-center items-center gap-1.5 pointer-events-none z-10">
         ${photos.map((_, i) => `
           <span class="w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === 0 ? 'bg-white w-4' : 'bg-white/40'}"></span>
         `).join('')}
@@ -186,6 +180,123 @@ function handleCarouselScroll(carouselId, total) {
       dots[i].className = 'w-1.5 h-1.5 rounded-full bg-white/40 transition-all duration-300';
     }
   }
+}
+
+// ==========================================
+// VISUAL GALLERY FEED (INSTAGRAM STYLE RANKED BY SCORE)
+// ==========================================
+function loadGalleryFeed() {
+  if (!state.currentUser) return;
+
+  const sortOption = document.getElementById('gallery-sort-filter')?.value || 'score_desc';
+  let [sort, order] = sortOption.split('_');
+  if (!sort) sort = 'score';
+  if (!order) order = 'desc';
+
+  let events = [...state.events];
+
+  // Sort events (Highest score first by default)
+  events.sort((a, b) => {
+    if (sort === 'score') {
+      return order === 'asc' ? parseFloat(a.score) - parseFloat(b.score) : parseFloat(b.score) - parseFloat(a.score);
+    }
+    return order === 'asc' ? new Date(a.date) - new Date(b.date) : new Date(b.date) - new Date(a.date);
+  });
+
+  renderGalleryFeed(events);
+}
+
+function renderGalleryFeed(events) {
+  const container = document.getElementById('gallery-feed-container');
+  const emptyState = document.getElementById('gallery-empty-state');
+  if (!container) return;
+
+  if (!events || events.length === 0) {
+    container.innerHTML = '';
+    if (emptyState) emptyState.classList.remove('hidden');
+    return;
+  }
+
+  if (emptyState) emptyState.classList.add('hidden');
+
+  container.innerHTML = events.map(evt => {
+    const photos = getEventPhotos(evt);
+    const photosJson = JSON.stringify(photos).replace(/"/g, '&quot;');
+    const scoreVal = Number(evt.score).toFixed(1);
+
+    return `
+      <article class="bg-dark-800 rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl transition duration-300 hover:border-slate-600">
+        
+        <!-- CARD HEADER (Location & Score Badge) -->
+        <div class="px-5 py-3.5 flex items-center justify-between border-b border-slate-700/60 bg-dark-800/80">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-accent-500 text-white font-black text-sm flex items-center justify-center shadow">
+              <i data-lucide="map-pin" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <button onclick="switchTab('map'); selectLocationById('${evt.location_id}')" class="font-bold text-white text-base hover:text-brand-300 text-left transition leading-tight block truncate max-w-[200px] sm:max-w-md">
+                ${escapeHtml(evt.location_name || 'Spot')}
+              </button>
+              <div class="text-[11px] text-slate-400 flex items-center gap-1.5">
+                <span>${escapeHtml(evt.location_category || 'Location')}</span>
+                <span>•</span>
+                <span>${formatDate(evt.date)}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- RATING BADGE -->
+          <div class="px-3.5 py-1.5 rounded-full bg-amber-500/10 text-amber-400 font-extrabold text-sm flex items-center gap-1.5 border border-amber-500/30 shrink-0">
+            <i data-lucide="star" class="w-4 h-4 fill-amber-400"></i>
+            <span>${scoreVal}</span>
+          </div>
+        </div>
+
+        <!-- INSTAGRAM SWIPEABLE PHOTO CAROUSEL -->
+        <div class="p-2 sm:p-3 bg-dark-900/60">
+          ${photos.length > 0 ? renderInstagramCarousel(photos, evt.name, 'h-80 sm:h-96 md:h-[420px]') : `
+            <div class="h-64 rounded-3xl bg-dark-950 flex flex-col items-center justify-center text-slate-600 border border-slate-800">
+              <i data-lucide="image" class="w-12 h-12 mb-2"></i>
+              <span class="text-xs text-slate-500">No photos attached to this event</span>
+            </div>
+          `}
+        </div>
+
+        <!-- CARD FOOTER (Title, Actions & Notes) -->
+        <div class="p-5 pt-3">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-700/60 mb-3">
+            <div class="flex items-center gap-3">
+              <button onclick="toggleFavorite('${evt.id}', event)" class="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-amber-400 transition" title="Favorite">
+                <i data-lucide="star" class="w-5 h-5 ${evt.favorite ? 'fill-amber-400 text-amber-400' : ''}"></i>
+                <span>${evt.favorite ? 'Favorited' : 'Favorite'}</span>
+              </button>
+              <button onclick="openShareModal('${evt.id}')" class="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-accent-400 transition" title="Share">
+                <i data-lucide="share-2" class="w-5 h-5"></i>
+                <span>Share</span>
+              </button>
+            </div>
+            
+            ${photos.length > 0 ? `
+              <button onclick="openLightboxCarousel(${photosJson}, 0, '${escapeHtml(evt.name)}')" class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition">
+                <i data-lucide="maximize-2" class="w-4 h-4"></i> Fullscreen
+              </button>
+            ` : ''}
+          </div>
+
+          <!-- EVENT TITLE & DESCRIPTION -->
+          <div>
+            <h3 class="font-extrabold text-lg text-white mb-1.5">${escapeHtml(evt.name)}</h3>
+            <p class="text-xs text-slate-300 leading-relaxed italic mb-3">
+              "${escapeHtml(evt.description || 'No description notes added.')}"
+            </p>
+          </div>
+        </div>
+
+      </article>
+    `;
+  }).join('');
+
+  initIcons();
 }
 
 // ==========================================
@@ -238,7 +349,6 @@ function initCloudClient() {
   if (state.cloudConfig.url && state.cloudConfig.key && window.supabase) {
     try {
       state.supabase = window.supabase.createClient(state.cloudConfig.url, state.cloudConfig.key);
-      updateCloudStatusUI(true);
 
       state.supabase.auth.onAuthStateChange((event, session) => {
         if (session && session.user) {
@@ -265,24 +375,6 @@ function initCloudClient() {
     } catch (e) {
       console.warn('Supabase initialization failed:', e);
       state.supabase = null;
-      updateCloudStatusUI(false);
-    }
-  } else {
-    state.supabase = null;
-    updateCloudStatusUI(false);
-  }
-}
-
-function updateCloudStatusUI(connected) {
-  const dot = document.getElementById('cloud-status-dot');
-  const text = document.getElementById('cloud-status-text');
-  if (dot && text) {
-    if (connected) {
-      dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
-      text.innerText = 'Cloud Sync: Active';
-    } else {
-      dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
-      text.innerText = 'Connect Cloud';
     }
   }
 }
@@ -319,14 +411,76 @@ function disconnectCloudSync() {
   localStorage.removeItem('al_supabase_key');
   state.cloudConfig = { url: '', key: '' };
   state.supabase = null;
-  updateCloudStatusUI(false);
   closeModal('modal-cloud-config');
   showToast('Reset to local mode', 'info');
   logout(false);
 }
 
 // ==========================================
-// CLIENT-SIDE DATABASE WITH STRICT PER-USER STORAGE
+// LOCAL DATA MIGRATION TO SUPABASE
+// ==========================================
+async function migrateLocalDataToSupabase(userId) {
+  if (!state.supabase || !userId) return;
+
+  try {
+    let localLocs = [];
+    let localEvts = [];
+
+    const uLocs = JSON.parse(localStorage.getItem(`al_user_${userId}_locations`) || '[]');
+    const uEvts = JSON.parse(localStorage.getItem(`al_user_${userId}_events`) || '[]');
+    localLocs = [...uLocs];
+    localEvts = [...uEvts];
+
+    if (localLocs.length > 0) {
+      for (const loc of localLocs) {
+        await state.supabase.from('locations').upsert({
+          id: loc.id,
+          name: loc.name,
+          category: loc.category || 'Other',
+          lat: parseFloat(loc.lat),
+          lng: parseFloat(loc.lng),
+          address: loc.address || '',
+          notes: loc.notes || '',
+          user_id: userId
+        }, { onConflict: 'id' });
+      }
+    }
+
+    if (localEvts.length > 0) {
+      for (const evt of localEvts) {
+        await state.supabase.from('events').upsert({
+          id: evt.id,
+          location_id: evt.location_id,
+          name: evt.name,
+          date: evt.date,
+          description: evt.description || '',
+          score: parseFloat(evt.score) || 5.0,
+          photo_url: evt.photo_url || '',
+          favorite: evt.favorite ? 1 : 0,
+          tags: evt.tags || '',
+          user_id: userId
+        }, { onConflict: 'id' });
+      }
+    }
+  } catch (e) {
+    console.warn('Migration error:', e);
+  }
+}
+
+function triggerManualDataMigration() {
+  if (!state.currentUser) {
+    showToast('Please sign in first', 'error');
+    return;
+  }
+  showToast('Syncing local events to Supabase...', 'info');
+  migrateLocalDataToSupabase(state.currentUser.id).then(() => {
+    showToast('Local events synced to Cloud database! ☁️⭐', 'success');
+    loadAllData();
+  });
+}
+
+// ==========================================
+// CLIENT-SIDE DATABASE FOR LOCAL MODE
 // ==========================================
 const ClientDB = {
   getUsers() {
@@ -475,17 +629,12 @@ function renderUserHeader() {
   if (state.currentUser) {
     const initials = (state.currentUser.email || state.currentUser.username || 'AL').slice(0, 2).toUpperCase();
     container.innerHTML = `
-      <div class="flex items-center gap-1.5">
-        <button onclick="switchTab('profile')" class="flex items-center gap-2 bg-dark-700/80 hover:bg-dark-600 px-2.5 py-1.5 rounded-xl border border-slate-700 transition" title="View Account">
-          <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-brand-600 to-accent-500 text-white font-black text-xs flex items-center justify-center">
-            ${initials}
-          </div>
-          <span class="text-xs font-bold text-white max-w-[110px] truncate">${escapeHtml(state.currentUser.email || state.currentUser.username)}</span>
-        </button>
-        <button onclick="logout(true)" class="p-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-dark-700 transition" title="Sign Out">
-          <i data-lucide="log-out" class="w-4 h-4"></i>
-        </button>
-      </div>
+      <button onclick="switchTab('profile')" class="flex items-center gap-2 bg-dark-700/80 hover:bg-dark-600 px-3 py-1.5 rounded-xl border border-slate-700 hover:border-brand-500 transition shadow" title="Account Settings">
+        <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-brand-600 to-accent-500 text-white font-black text-xs flex items-center justify-center">
+          ${initials}
+        </div>
+        <span class="text-xs font-bold text-white max-w-[120px] truncate hidden sm:inline">${escapeHtml(state.currentUser.email || state.currentUser.username)}</span>
+      </button>
     `;
   } else {
     container.innerHTML = `
@@ -557,7 +706,7 @@ function handleAuthSubmit(e) {
           if (error.message && error.message.toLowerCase().includes('already registered')) {
             return state.supabase.auth.signInWithPassword({ email: authEmail, password }).then(({ data: logData, error: logErr }) => {
               if (logErr) {
-                showToast('Email already exists. Please check password.', 'error');
+                showToast('Email already registered. Check password.', 'error');
               } else {
                 showToast('Signed in successfully! ⭐', 'success');
                 checkAuthAndLoad();
@@ -763,6 +912,7 @@ function logout(notify = true) {
   renderLocationCarousel();
   renderEventsTable([]);
   renderFavoritesGrid([]);
+  renderGalleryFeed([]);
 
   if (notify) showToast('Signed out successfully', 'info');
   openAuthModal('login');
@@ -793,7 +943,7 @@ function switchTab(tabId) {
     activeNavBtn.classList.remove('text-slate-400');
   }
 
-  ['map', 'events', 'kpis', 'favorites', 'profile'].forEach(t => {
+  ['map', 'gallery', 'events', 'kpis', 'favorites', 'profile'].forEach(t => {
     const mBtn = document.getElementById(`mobile-nav-${t}`);
     if (mBtn) {
       if (t === tabId) {
@@ -808,6 +958,8 @@ function switchTab(tabId) {
     setTimeout(() => {
       if (map) map.invalidateSize();
     }, 200);
+  } else if (tabId === 'gallery') {
+    loadGalleryFeed();
   } else if (tabId === 'events') {
     loadEventsTable();
   } else if (tabId === 'kpis') {
@@ -1138,7 +1290,7 @@ function renderLocationCarousel() {
 }
 
 // ==========================================
-// DATA LOADING (Locations, Events, KPIs)
+// DATA LOADING (Locations, Events, KPIs, Gallery)
 // ==========================================
 function loadAllData() {
   if (!state.currentUser) return;
@@ -1153,7 +1305,11 @@ function loadAllData() {
 
       state.events = rawEvts.map(e => {
         const loc = rawLocs.find(l => l.id === e.location_id);
-        return { ...e, location_name: loc ? loc.name : 'Unknown' };
+        return {
+          ...e,
+          location_name: loc ? loc.name : 'Unknown Spot',
+          location_category: loc ? loc.category : 'Other'
+        };
       });
 
       state.locations = rawLocs.map(l => {
@@ -1175,6 +1331,7 @@ function loadAllData() {
       renderMapMarkers();
       renderLocationCarousel();
       loadEventsTable();
+      loadGalleryFeed();
       loadKPIs();
     });
     return;
@@ -1190,7 +1347,11 @@ function loadFromClientDB() {
 
   state.events = rawEvts.map(e => {
     const loc = rawLocs.find(l => l.id === e.location_id);
-    return { ...e, location_name: loc ? loc.name : 'Unknown' };
+    return {
+      ...e,
+      location_name: loc ? loc.name : 'Unknown Spot',
+      location_category: loc ? loc.category : 'Other'
+    };
   });
 
   state.locations = rawLocs.map(l => {
@@ -1212,6 +1373,7 @@ function loadFromClientDB() {
   renderMapMarkers();
   renderLocationCarousel();
   loadEventsTable();
+  loadGalleryFeed();
   loadKPIs();
 }
 
@@ -1954,7 +2116,6 @@ async function handleMultiplePhotosSelected(input) {
       state.modalPhotos.push(compressedDataUrl);
       renderPhotoThumbnailsGrid();
 
-      // Parallel upload to Supabase storage if available
       if (state.supabase) {
         const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
         state.supabase.storage.from('photos').upload(filename, file, { upsert: true }).then(({ data, error }) => {
@@ -1987,7 +2148,6 @@ function handleEventSubmit(e) {
   const description = document.getElementById('evt-input-description').value;
   const favorite = document.getElementById('evt-input-favorite').checked ? 1 : 0;
 
-  // Serialize photos as JSON array string
   const photo_url = JSON.stringify(state.modalPhotos);
 
   const payload = { location_id, name, date, score, description, photo_url, favorite };
