@@ -2656,8 +2656,273 @@ function copyShareText() {
 }
 
 // ==========================================
-// EXPORTS (JSON & CSV)
+// EXPORTS (JSON, CSV & DIARY PDF)
 // ==========================================
+function exportDiaryPDF() {
+  if (!state.events || state.events.length === 0) {
+    showToast('No events logged to export.', 'info');
+    return;
+  }
+
+  showToast('Generating Diary PDF document...', 'info');
+
+  const sortedEvents = [...state.events].sort((a, b) => new Date(a.date) - new Date(b.date));
+  const userLabel = state.currentUser ? (state.currentUser.email || state.currentUser.username) : 'Guest';
+  const totalEvents = sortedEvents.length;
+  const totalLocations = new Set(sortedEvents.map(e => e.location_id)).size;
+  const avgScore = (sortedEvents.reduce((acc, e) => acc + (parseFloat(e.score) || 0), 0) / totalEvents).toFixed(1);
+  const firstDate = formatDate(sortedEvents[0].date);
+  const lastDate = formatDate(sortedEvents[sortedEvents.length - 1].date);
+
+  const printHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AL — Experience Diary (${escapeHtml(userLabel)})</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #ffffff;
+      color: #0f172a;
+      line-height: 1.5;
+    }
+
+    @media screen {
+      body { background: #f1f5f9; padding: 24px; }
+      .page-container { max-width: 820px; margin: 0 auto; background: #ffffff; padding: 48px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
+      .no-print-bar { max-width: 820px; margin: 0 auto 20px auto; display: flex; align-items: center; justify-content: space-between; }
+    }
+
+    @media print {
+      body { background: #ffffff; }
+      .page-container { padding: 0; }
+      .no-print-bar { display: none !important; }
+      .diary-entry { page-break-inside: avoid; }
+    }
+
+    .diary-header {
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 24px;
+      margin-bottom: 36px;
+    }
+    .diary-logo {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      color: #6d28d9;
+      display: inline-block;
+    }
+    .diary-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 36px;
+      font-weight: 700;
+      margin: 12px 0 6px 0;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+    }
+    .diary-subtitle {
+      font-size: 14px;
+      color: #64748b;
+    }
+    .diary-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .stat-box { text-align: center; }
+    .stat-val { font-size: 22px; font-weight: 800; color: #0f172a; }
+    .stat-lbl { font-size: 11px; text-transform: uppercase; font-weight: 600; color: #64748b; margin-top: 2px; }
+
+    .diary-entry {
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 32px;
+      background: #ffffff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    }
+    .entry-date-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .entry-date {
+      font-size: 13px;
+      font-weight: 700;
+      color: #6d28d9;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .entry-score {
+      font-size: 14px;
+      font-weight: 800;
+      background: #fef3c7;
+      color: #b45309;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid #fde68a;
+    }
+    .entry-name {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 0 6px 0;
+      color: #0f172a;
+    }
+    .entry-location {
+      font-size: 13px;
+      color: #475569;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .photo-img {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+    .entry-narrative {
+      font-family: Georgia, serif;
+      font-style: italic;
+      font-size: 15px;
+      line-height: 1.7;
+      color: #334155;
+      background: #f8fafc;
+      padding: 16px;
+      border-radius: 12px;
+      border-left: 4px solid #6d28d9;
+      margin-top: 14px;
+    }
+    .audio-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #6d28d9;
+      background: #ede9fe;
+      padding: 4px 10px;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print-bar">
+    <button onclick="window.print()" style="background:#6d28d9; color:#ffffff; font-weight:700; font-size:14px; padding:10px 20px; border:none; border-radius:12px; cursor:pointer; box-shadow:0 4px 12px rgba(109,40,217,0.3);">
+      🖨️ Print / Save to PDF
+    </button>
+    <span style="font-size:12px; color:#64748b;">(Choose "Save as PDF" in your print destination)</span>
+  </div>
+
+  <div class="page-container">
+    <header class="diary-header">
+      <div class="diary-logo">AL</div>
+      <h1 class="diary-title">Personal Experience Diary</h1>
+      <div class="diary-subtitle">Chronological travel log & rated moments for <strong>\${escapeHtml(userLabel)}</strong></div>
+      
+      <div class="diary-stats-grid">
+        <div class="stat-box">
+          <div class="stat-val">\${totalEvents}</div>
+          <div class="stat-lbl">Total Events</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val">\${totalLocations}</div>
+          <div class="stat-lbl">Unique Spots</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val">⭐ \${avgScore}</div>
+          <div class="stat-lbl">Avg Score</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" style="font-size:13px; margin-top:6px;">\${firstDate.split(',')[0]} – \${lastDate.split(',')[0]}</div>
+          <div class="stat-lbl">Timeline Span</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="diary-entries">
+      \${sortedEvents.map((evt, idx) => {
+        const photos = getEventPhotos(evt);
+        const audioUrl = getEventAudio(evt);
+        return \`
+          <article class="diary-entry">
+            <div class="entry-date-bar">
+              <span class="entry-date">#\${idx + 1} — \${formatDate(evt.date)}</span>
+              <span class="entry-score">⭐ \${Number(evt.score).toFixed(1)} / 10</span>
+            </div>
+
+            <h2 class="entry-name">\${escapeHtml(evt.name)}</h2>
+            <div class="entry-location">
+              <span>📍 \${escapeHtml(evt.location_name || 'Location')}</span>
+              <span>•</span>
+              <span>\${escapeHtml(evt.location_category || 'Spot')}</span>
+            </div>
+
+            \${photos.length > 0 ? \`
+              <div class="photo-grid">
+                \${photos.map(p => \`
+                  <img src="\${escapeHtml(p)}" class="photo-img" alt="\${escapeHtml(evt.name)}">
+                \`).join('')}
+              </div>
+            \` : ''}
+
+            \${evt.description ? \`
+              <div class="entry-narrative">
+                "\${escapeHtml(evt.description)}"
+              </div>
+            \` : ''}
+
+            \${audioUrl ? \`
+              <div class="audio-badge">
+                🎙️ Voice note recorded with this event
+              </div>
+            \` : ''}
+          </article>
+        \`;
+      }).join('')}
+    </main>
+  </div>
+</body>
+</html>
+  `;
+
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.write(printHtml);
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.focus();
+    }, 500);
+  } else {
+    showToast('Please allow popup windows to export PDF.', 'error');
+  }
+}
+
 function exportDataJSON() {
   const data = {
     app: 'AL',
