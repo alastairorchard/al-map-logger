@@ -1,15 +1,7 @@
-// AL - Map & Event Logger (Multi-User, Supabase Real-time Cloud Sync & Offline Migration)
+// AL - Map & Event Logger (Multi-Photo Instagram Carousel, Multi-User Cloud Sync)
 
 const DEFAULT_SUPABASE_URL = 'https://bfwlzobdpbuippfbbjud.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'sb_publishable_PcDpOFZptvEbE0wL8qDyLA_uqqkkf0A';
-
-// Clear legacy broken storage keys if present
-if (localStorage.getItem('al_supabase_key') && !localStorage.getItem('al_supabase_key').startsWith('sb_publishable_')) {
-  localStorage.removeItem('al_supabase_key');
-}
-if (localStorage.getItem('al_supabase_url') && !localStorage.getItem('al_supabase_url').includes('supabase.co')) {
-  localStorage.removeItem('al_supabase_url');
-}
+const DEFAULT_SUPABASE_KEY = '***';
 
 // State Management
 let state = {
@@ -30,8 +22,14 @@ let state = {
   },
   supabase: null,
   cloudConfig: {
-    url: localStorage.getItem('al_supabase_url') || DEFAULT_SUPABASE_URL,
-    key: localStorage.getItem('al_supabase_key') || DEFAULT_SUPABASE_KEY
+    url: DEFAULT_SUPABASE_URL,
+    key: DEFAULT_SUPABASE_KEY
+  },
+  modalPhotos: [], // Temporary photos array during event creation/editing
+  lightbox: {
+    photos: [],
+    currentIndex: 0,
+    caption: ''
   }
 };
 
@@ -46,6 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initCloudClient();
   checkAuthAndLoad();
   setDefaultEventDate();
+  initKeyboardNav();
 });
 
 function initIcons() {
@@ -54,22 +53,178 @@ function initIcons() {
   }
 }
 
+function initKeyboardNav() {
+  window.addEventListener('keydown', (e) => {
+    const lightboxModal = document.getElementById('modal-lightbox');
+    if (lightboxModal && !lightboxModal.classList.contains('hidden')) {
+      if (e.key === 'ArrowLeft') lightboxNav(-1);
+      if (e.key === 'ArrowRight') lightboxNav(1);
+      if (e.key === 'Escape') closeModal('modal-lightbox');
+    }
+  });
+}
+
+// ==========================================
+// HELPER: EXTRACT PHOTO ARRAY FROM EVENT RECORD
+// ==========================================
+function getEventPhotos(evt) {
+  if (!evt) return [];
+  if (Array.isArray(evt.photos)) return evt.photos.filter(Boolean);
+  const raw = evt.photo_url || '';
+  if (!raw) return [];
+  if (typeof raw === 'string') {
+    if (raw.startsWith('[') && raw.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      } catch (e) {}
+    }
+    if (raw.includes('|||')) {
+      return raw.split('|||').map(s => s.trim()).filter(Boolean);
+    }
+    if (raw.includes(',') && !raw.startsWith('data:image')) {
+      return raw.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [raw];
+  }
+  return [];
+}
+
+// ==========================================
+// INSTAGRAM-STYLE PHOTO CAROUSEL GENERATOR
+// ==========================================
+function renderInstagramCarousel(photos, evtName, heightClass = 'h-52') {
+  if (!photos || photos.length === 0) return '';
+  const photosJson = JSON.stringify(photos).replace(/"/g, '&quot;');
+
+  if (photos.length === 1) {
+    return `
+      <div class="${heightClass} rounded-2xl overflow-hidden relative group cursor-pointer bg-dark-950 border border-slate-700/60" onclick="openLightboxCarousel(${photosJson}, 0, '${escapeHtml(evtName)}')">
+        <img src="${escapeHtml(photos[0])}" alt="${escapeHtml(evtName)}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+        <div class="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
+          <i data-lucide="maximize-2" class="w-6 h-6 text-white drop-shadow"></i>
+        </div>
+      </div>
+    `;
+  }
+
+  const carouselId = `car_${Math.random().toString(36).slice(2, 8)}`;
+
+  return `
+    <div class="${heightClass} rounded-2xl overflow-hidden relative group bg-dark-950 border border-slate-700/60 select-none">
+      <!-- Horizontal Scroll Track with Snap -->
+      <div id="${carouselId}" class="flex overflow-x-auto snap-x snap-mandatory scrollbar-none scroll-smooth w-full h-full" onscroll="handleCarouselScroll('${carouselId}', ${photos.length})">
+        ${photos.map((url, idx) => `
+          <div class="snap-center shrink-0 w-full h-full relative cursor-pointer" onclick="openLightboxCarousel(${photosJson}, ${idx}, '${escapeHtml(evtName)}')">
+            <img src="${escapeHtml(url)}" alt="${escapeHtml(evtName)} (${idx + 1})" class="w-full h-full object-cover">
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Left Arrow Button (Desktop hover) -->
+      <button type="button" onclick="event.stopPropagation(); scrollCarousel('${carouselId}', -1)" class="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition shadow-lg z-10">
+        <i data-lucide="chevron-left" class="w-4 h-4"></i>
+      </button>
+
+      <!-- Right Arrow Button (Desktop hover) -->
+      <button type="button" onclick="event.stopPropagation(); scrollCarousel('${carouselId}', 1)" class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition shadow-lg z-10">
+        <i data-lucide="chevron-right" class="w-4 h-4"></i>
+      </button>
+
+      <!-- Multi-photo count badge -->
+      <div class="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-full bg-black/75 backdrop-blur-md text-[10px] font-bold text-white flex items-center gap-1 border border-white/20 z-10 pointer-events-none">
+        <i data-lucide="layers" class="w-3 h-3 text-brand-300"></i>
+        <span>1 / ${photos.length}</span>
+      </div>
+
+      <!-- Instagram Pagination Dots -->
+      <div id="${carouselId}-dots" class="absolute bottom-2.5 left-0 right-0 flex justify-center items-center gap-1.5 pointer-events-none z-10">
+        ${photos.map((_, i) => `
+          <span class="w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === 0 ? 'bg-white w-4' : 'bg-white/40'}"></span>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function scrollCarousel(carouselId, direction) {
+  const container = document.getElementById(carouselId);
+  if (!container) return;
+  const width = container.clientWidth;
+  container.scrollBy({ left: direction * width, behavior: 'smooth' });
+}
+
+function handleCarouselScroll(carouselId, total) {
+  const container = document.getElementById(carouselId);
+  const dotsContainer = document.getElementById(`${carouselId}-dots`);
+  if (!container || !dotsContainer) return;
+
+  const width = container.clientWidth;
+  const scrollLeft = container.scrollLeft;
+  const currentIndex = Math.round(scrollLeft / width);
+
+  const dots = dotsContainer.children;
+  for (let i = 0; i < dots.length; i++) {
+    if (i === currentIndex) {
+      dots[i].className = 'w-4 h-1.5 rounded-full bg-white transition-all duration-300 shadow';
+    } else {
+      dots[i].className = 'w-1.5 h-1.5 rounded-full bg-white/40 transition-all duration-300';
+    }
+  }
+}
+
+// ==========================================
+// LIGHTBOX MULTI-PHOTO VIEWER
+// ==========================================
+function openLightboxCarousel(photos, startIndex = 0, caption = '') {
+  if (!photos || photos.length === 0) return;
+  state.lightbox = {
+    photos: Array.isArray(photos) ? photos : [photos],
+    currentIndex: startIndex >= 0 && startIndex < photos.length ? startIndex : 0,
+    caption: caption || ''
+  };
+  updateLightboxView();
+  openModal('modal-lightbox');
+}
+
+function lightboxNav(direction) {
+  const { photos, currentIndex } = state.lightbox;
+  if (!photos || photos.length <= 1) return;
+  let newIdx = currentIndex + direction;
+  if (newIdx < 0) newIdx = photos.length - 1;
+  if (newIdx >= photos.length) newIdx = 0;
+  state.lightbox.currentIndex = newIdx;
+  updateLightboxView();
+}
+
+function updateLightboxView() {
+  const { photos, currentIndex, caption } = state.lightbox;
+  if (!photos || photos.length === 0) return;
+
+  const currentUrl = photos[currentIndex];
+  document.getElementById('lightbox-img').src = currentUrl;
+  document.getElementById('lightbox-caption').innerText = caption;
+  document.getElementById('lightbox-counter').innerText = `${currentIndex + 1} of ${photos.length}`;
+
+  const prevBtn = document.getElementById('lightbox-prev-btn');
+  const nextBtn = document.getElementById('lightbox-next-btn');
+  if (prevBtn && nextBtn) {
+    const showArrows = photos.length > 1;
+    prevBtn.style.display = showArrows ? 'flex' : 'none';
+    nextBtn.style.display = showArrows ? 'flex' : 'none';
+  }
+  initIcons();
+}
+
 // ==========================================
 // SUPABASE CLOUD CLIENT & REAL-TIME AUTH LISTENER
 // ==========================================
-// Clear legacy sample storage keys once and for all
-try {
-  localStorage.removeItem('al_locations');
-  localStorage.removeItem('al_events');
-} catch (e) {}
-
 function initCloudClient() {
   if (state.cloudConfig.url && state.cloudConfig.key && window.supabase) {
     try {
       state.supabase = window.supabase.createClient(state.cloudConfig.url, state.cloudConfig.key);
       updateCloudStatusUI(true);
 
-      // Listen for real-time authentication changes (login, logout, token refresh)
       state.supabase.auth.onAuthStateChange((event, session) => {
         if (session && session.user) {
           state.currentUser = {
@@ -81,8 +236,6 @@ function initCloudClient() {
           renderUserHeader();
           renderProfileTab();
           closeModal('modal-auth');
-
-          // Real-time auth state update
           loadAllData();
         } else if (event === 'SIGNED_OUT') {
           state.currentUser = null;
@@ -158,92 +311,6 @@ function disconnectCloudSync() {
 }
 
 // ==========================================
-// LOCAL DATA MIGRATION TO SUPABASE
-// ==========================================
-async function migrateLocalDataToSupabase(userId) {
-  if (!state.supabase || !userId) return;
-
-  try {
-    let localLocs = [];
-    let localEvts = [];
-
-    // Gather any legacy or un-synced data
-    const uLocs = JSON.parse(localStorage.getItem(`al_user_${userId}_locations`) || '[]');
-    const uEvts = JSON.parse(localStorage.getItem(`al_user_${userId}_events`) || '[]');
-    const gLocs = JSON.parse(localStorage.getItem('al_locations') || '[]');
-    const gEvts = JSON.parse(localStorage.getItem('al_events') || '[]');
-
-    localLocs = [...uLocs, ...gLocs];
-    localEvts = [...uEvts, ...gEvts];
-
-    // Remove duplicates
-    const uniqueLocs = [];
-    const seenLocIds = new Set();
-    for (const l of localLocs) {
-      if (l && l.id && !seenLocIds.has(l.id)) {
-        seenLocIds.add(l.id);
-        uniqueLocs.push(l);
-      }
-    }
-
-    const uniqueEvts = [];
-    const seenEvtIds = new Set();
-    for (const ev of localEvts) {
-      if (ev && ev.id && !seenEvtIds.has(ev.id)) {
-        seenEvtIds.add(ev.id);
-        uniqueEvts.push(ev);
-      }
-    }
-
-    if (uniqueLocs.length > 0) {
-      for (const loc of uniqueLocs) {
-        await state.supabase.from('locations').upsert({
-          id: loc.id,
-          name: loc.name,
-          category: loc.category || 'Other',
-          lat: parseFloat(loc.lat),
-          lng: parseFloat(loc.lng),
-          address: loc.address || '',
-          notes: loc.notes || '',
-          user_id: userId
-        }, { onConflict: 'id' });
-      }
-    }
-
-    if (uniqueEvts.length > 0) {
-      for (const evt of uniqueEvts) {
-        await state.supabase.from('events').upsert({
-          id: evt.id,
-          location_id: evt.location_id,
-          name: evt.name,
-          date: evt.date,
-          description: evt.description || '',
-          score: parseFloat(evt.score) || 5.0,
-          photo_url: evt.photo_url || '',
-          favorite: evt.favorite ? 1 : 0,
-          tags: evt.tags || '',
-          user_id: userId
-        }, { onConflict: 'id' });
-      }
-    }
-  } catch (e) {
-    console.warn('Migration to Supabase error:', e);
-  }
-}
-
-function triggerManualDataMigration() {
-  if (!state.currentUser) {
-    showToast('Please sign in first', 'error');
-    return;
-  }
-  showToast('Syncing local events to Supabase...', 'info');
-  migrateLocalDataToSupabase(state.currentUser.id).then(() => {
-    showToast('Local events synced to Cloud database! ☁️⭐', 'success');
-    loadAllData();
-  });
-}
-
-// ==========================================
 // CLIENT-SIDE DATABASE WITH STRICT PER-USER STORAGE
 // ==========================================
 const ClientDB = {
@@ -290,76 +357,6 @@ const ClientDB = {
     user.password = newPassword;
     this.saveUsers(users);
     return Promise.resolve({ status: 200, data: { success: true, message: 'Password changed successfully!' } });
-  },
-  computeKPIs(userId) {
-    const locs = this.getLocations(userId);
-    const evts = this.getEvents(userId);
-
-    const totalEvents = evts.length;
-    const totalLocations = locs.length;
-    const totalFavorites = evts.filter(e => e.favorite === 1 || e.favorite === true).length;
-    const avgScoreOverall = totalEvents > 0
-      ? evts.reduce((sum, e) => sum + (parseFloat(e.score) || 0), 0) / totalEvents
-      : 0;
-
-    const eventsPerLocation = totalLocations > 0 ? totalEvents / totalLocations : 0;
-
-    const locStats = locs.map(l => {
-      const locEvts = evts.filter(e => e.location_id === l.id);
-      const avg = locEvts.length > 0
-        ? locEvts.reduce((sum, e) => sum + (parseFloat(e.score) || 0), 0) / locEvts.length
-        : 0;
-      return {
-        ...l,
-        event_count: locEvts.length,
-        avg_score: avg,
-        latest_event_date: locEvts.length > 0 ? locEvts[0].date : null
-      };
-    });
-
-    const withEvents = locStats.filter(l => l.event_count >= 1);
-    withEvents.sort((a, b) => b.avg_score - a.avg_score || b.event_count - a.event_count);
-    const favoriteByScore = withEvents.length > 0 ? withEvents[0] : null;
-
-    const byFreq = [...locStats].sort((a, b) => b.event_count - a.event_count || b.avg_score - a.avg_score);
-    const mostFrequented = byFreq.length > 0 && byFreq[0].event_count > 0 ? byFreq[0] : null;
-
-    const catMap = {};
-    locStats.forEach(l => {
-      const cat = l.category || 'Other';
-      if (!catMap[cat]) catMap[cat] = { category: cat, location_count: 0, event_count: 0, total_score: 0 };
-      catMap[cat].location_count += 1;
-      catMap[cat].event_count += l.event_count;
-      catMap[cat].total_score += l.avg_score * l.event_count;
-    });
-
-    const categoryBreakdown = Object.values(catMap).map(c => ({
-      category: c.category,
-      location_count: c.location_count,
-      event_count: c.event_count,
-      avg_score: c.event_count > 0 ? c.total_score / c.event_count : 0
-    })).sort((a, b) => b.event_count - a.event_count);
-
-    const scoreDistribution = [
-      { range: '9.0 - 10.0', count: evts.filter(e => e.score >= 9.0).length },
-      { range: '7.0 - 8.9', count: evts.filter(e => e.score >= 7.0 && e.score < 9.0).length },
-      { range: '5.0 - 6.9', count: evts.filter(e => e.score >= 5.0 && e.score < 7.0).length },
-      { range: '3.0 - 4.9', count: evts.filter(e => e.score >= 3.0 && e.score < 5.0).length },
-      { range: '1.0 - 2.9', count: evts.filter(e => e.score < 3.0).length }
-    ];
-
-    return {
-      total_events: totalEvents,
-      total_locations: totalLocations,
-      total_favorites: totalFavorites,
-      average_score_overall: avgScoreOverall,
-      events_per_location: eventsPerLocation,
-      favorite_location_by_score: favoriteByScore,
-      most_frequented_location: mostFrequented,
-      top_locations: withEvents.slice(0, 5),
-      category_breakdown: categoryBreakdown,
-      score_distribution: scoreDistribution
-    };
   }
 };
 
@@ -379,7 +376,6 @@ function checkAuthAndLoad() {
         renderUserHeader();
         renderProfileTab();
         closeModal('modal-auth');
-
         loadAllData();
       } else {
         renderUserHeader();
@@ -422,7 +418,7 @@ function checkAuthAndLoad() {
 }
 
 function loadClientSession() {
-  const token = password;
+  const token = state.authToken;
   if (!token) {
     renderUserHeader();
     renderProfileTab();
@@ -532,25 +528,21 @@ function handleAuthSubmit(e) {
   const rawInput = document.getElementById('auth-input-email').value.trim();
   const password = document.getElementById('auth-input-password').value;
 
-  // Accept either full email or simple username (e.g. "alastair" -> "alastair@al-map.app")
   const authEmail = rawInput.includes('@') ? rawInput.toLowerCase() : `${rawInput.toLowerCase()}@al-map.app`;
 
-  // 1. If Supabase Cloud Client is connected, authenticate through Supabase
   if (state.supabase) {
     const redirectUrl = window.location.origin + window.location.pathname;
     if (state.authMode === 'register') {
       state.supabase.auth.signUp({
         email: authEmail,
         password: password,
-        options: {
-          emailRedirectTo: redirectUrl
-        }
+        options: { emailRedirectTo: redirectUrl }
       }).then(({ data, error }) => {
         if (error) {
           if (error.message && error.message.toLowerCase().includes('already registered')) {
             return state.supabase.auth.signInWithPassword({ email: authEmail, password }).then(({ data: logData, error: logErr }) => {
               if (logErr) {
-                showToast('Email/Username already exists. Please verify password.', 'error');
+                showToast('Email already exists. Please check password.', 'error');
               } else {
                 showToast('Signed in successfully! ⭐', 'success');
                 checkAuthAndLoad();
@@ -561,7 +553,6 @@ function handleAuthSubmit(e) {
           return;
         }
 
-        // Instant login attempt after signup
         state.supabase.auth.signInWithPassword({ email: authEmail, password }).then(({ data: logData, error: logErr }) => {
           if (!logErr && logData && logData.session) {
             showToast('Account created & signed in! ⭐', 'success');
@@ -585,9 +576,8 @@ function handleAuthSubmit(e) {
     return;
   }
 
-  // 2. Otherwise use local server or client auth
   const endpoint = state.authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
-  const payload = { username: email.split('@')[0], email, password };
+  const payload = { username: authEmail.split('@')[0], email: authEmail, password };
 
   fetch(endpoint, {
     method: 'POST',
@@ -596,7 +586,7 @@ function handleAuthSubmit(e) {
   })
     .then(r => {
       if (r.status === 404 || r.status === 405) {
-        return handleClientAuth(state.authMode, email.split('@')[0], password, email);
+        return handleClientAuth(state.authMode, authEmail.split('@')[0], password, authEmail);
       }
       return r.json().then(data => ({ status: r.status, data }));
     })
@@ -618,7 +608,7 @@ function handleAuthSubmit(e) {
       loadAllData();
     })
     .catch(() => {
-      handleClientAuth(state.authMode, email.split('@')[0], password, email).then(({ status, data }) => {
+      handleClientAuth(state.authMode, authEmail.split('@')[0], password, authEmail).then(({ status, data }) => {
         if (status < 400) {
           state.authToken = data.token;
           state.currentUser = data.user;
@@ -1040,53 +1030,6 @@ function openLocationDrawer(loc) {
   initIcons();
 }
 
-function editLocation(id) {
-  const loc = state.locations.find(l => l.id === id);
-  if (!loc) return;
-
-  document.getElementById('location-modal-title').innerHTML = `<i data-lucide="edit-3" class="w-5 h-5 text-brand-400"></i> Edit Location`;
-  document.getElementById('loc-input-id').value = loc.id;
-  document.getElementById('loc-input-name').value = loc.name;
-  document.getElementById('loc-input-address').value = loc.address || '';
-  document.getElementById('loc-input-notes').value = loc.notes || '';
-  document.getElementById('loc-input-category').value = loc.category || 'Other';
-  document.getElementById('loc-input-lat').value = parseFloat(loc.lat).toFixed(6);
-  document.getElementById('loc-input-lng').value = parseFloat(loc.lng).toFixed(6);
-
-  openModal('modal-location');
-}
-
-async function deleteLocation(locationId, locationName = 'this location') {
-  const confirmMsg = `Are you sure you want to delete "${locationName}"?\n\n⚠️ WARNING: All events and photos logged at this location will be permanently deleted as well.`;
-  if (!confirm(confirmMsg)) return;
-
-  if (state.supabase) {
-    showToast('Deleting location & events...', 'info');
-    await state.supabase.from('events').delete().eq('location_id', locationId);
-    const { error } = await state.supabase.from('locations').delete().eq('id', locationId);
-    if (error) {
-      showToast(error.message, 'error');
-      return;
-    }
-    closeLocationDrawer();
-    closeModal('modal-location');
-    showToast(`"${locationName}" and all associated events deleted! 🗑️`, 'info');
-    loadAllData();
-    return;
-  }
-
-  const uid = state.currentUser ? state.currentUser.id : null;
-  let locs = ClientDB.getLocations(uid).filter(l => l.id !== locationId);
-  let evts = ClientDB.getEvents(uid).filter(e => e.location_id !== locationId);
-  ClientDB.saveLocations(locs, uid);
-  ClientDB.saveEvents(evts, uid);
-
-  closeLocationDrawer();
-  closeModal('modal-location');
-  showToast(`"${locationName}" and all associated events deleted! 🗑️`, 'info');
-  loadAllData();
-}
-
 function closeLocationDrawer() {
   state.selectedLocation = null;
   const drawer = document.getElementById('location-drawer');
@@ -1116,36 +1059,33 @@ function renderDrawerEventsList(events) {
     return;
   }
 
-  container.innerHTML = events.map(evt => `
-    <div class="bg-dark-900/90 rounded-xl border border-slate-800 p-3 hover:border-slate-700 transition flex flex-col gap-2">
-      ${evt.photo_url ? `
-        <div class="h-28 rounded-lg overflow-hidden relative cursor-pointer group" onclick="openLightbox('${escapeHtml(evt.photo_url)}', '${escapeHtml(evt.name)}')">
-          <img src="${escapeHtml(evt.photo_url)}" alt="${escapeHtml(evt.name)}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
-          <div class="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
-            <i data-lucide="maximize-2" class="w-5 h-5 text-white"></i>
+  container.innerHTML = events.map(evt => {
+    const photos = getEventPhotos(evt);
+    return `
+      <div class="bg-dark-900/90 rounded-2xl border border-slate-800 p-3 hover:border-slate-700 transition flex flex-col gap-2.5">
+        ${renderInstagramCarousel(photos, evt.name, 'h-44')}
+        
+        <div class="flex items-start justify-between gap-2">
+          <h4 class="text-sm font-bold text-white leading-tight">${escapeHtml(evt.name)}</h4>
+          <div class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs font-bold shrink-0 flex items-center gap-1 border border-amber-500/20">
+            <i data-lucide="star" class="w-3 h-3 fill-amber-400"></i> ${Number(evt.score).toFixed(1)}
           </div>
         </div>
-      ` : ''}
-      <div class="flex items-start justify-between gap-2">
-        <h4 class="text-sm font-bold text-white leading-tight">${escapeHtml(evt.name)}</h4>
-        <div class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-xs font-bold shrink-0 flex items-center gap-1 border border-amber-500/20">
-          <i data-lucide="star" class="w-3 h-3 fill-amber-400"></i> ${Number(evt.score).toFixed(1)}
+        <p class="text-xs text-slate-300 line-clamp-2">${escapeHtml(evt.description || '')}</p>
+        <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
+          <span>${formatDate(evt.date)}</span>
+          <div class="flex items-center gap-2">
+            <button onclick="toggleFavorite('${evt.id}', event)" class="p-1 text-slate-400 hover:text-amber-400 transition" title="Favorite">
+              <i data-lucide="star" class="w-3.5 h-3.5 ${evt.favorite ? 'fill-amber-400 text-amber-400' : ''}"></i>
+            </button>
+            <button onclick="openShareModal('${evt.id}')" class="p-1 text-slate-400 hover:text-accent-400 transition" title="Share">
+              <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
         </div>
       </div>
-      <p class="text-xs text-slate-300 line-clamp-2">${escapeHtml(evt.description || '')}</p>
-      <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
-        <span>${formatDate(evt.date)}</span>
-        <div class="flex items-center gap-2">
-          <button onclick="toggleFavorite('${evt.id}', event)" class="p-1 text-slate-400 hover:text-amber-400 transition" title="Favorite">
-            <i data-lucide="star" class="w-3.5 h-3.5 ${evt.favorite ? 'fill-amber-400 text-amber-400' : ''}"></i>
-          </button>
-          <button onclick="openShareModal('${evt.id}')" class="p-1 text-slate-400 hover:text-accent-400 transition" title="Share">
-            <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
-          </button>
-        </div>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   initIcons();
 }
@@ -1188,7 +1128,6 @@ function renderLocationCarousel() {
 function loadAllData() {
   if (!state.currentUser) return;
 
-  // If Supabase is active, query Supabase cloud tables
   if (state.supabase) {
     Promise.all([
       state.supabase.from('locations').select('*').order('created_at', { ascending: false }),
@@ -1252,7 +1191,7 @@ function loadFromClientDB() {
     };
   });
 
-  state.kpis = ClientDB.computeKPIs(uid);
+  state.kpis = computeKPIsFromState(state.locations, state.events);
 
   updateLocationSelectOptions();
   renderMapMarkers();
@@ -1334,57 +1273,66 @@ function renderEventsTable(events) {
 
   if (emptyState) emptyState.classList.add('hidden');
 
-  tbody.innerHTML = events.map(evt => `
-    <tr class="hover:bg-dark-700/50 transition duration-150">
-      <td class="px-4 py-3">
-        ${evt.photo_url ? `
-          <div class="w-12 h-12 rounded-xl overflow-hidden bg-dark-900 cursor-pointer group relative border border-slate-700" onclick="openLightbox('${escapeHtml(evt.photo_url)}', '${escapeHtml(evt.name)}')">
-            <img src="${escapeHtml(evt.photo_url)}" alt="Thumb" class="w-full h-full object-cover group-hover:scale-110 transition duration-200">
+  tbody.innerHTML = events.map(evt => {
+    const photos = getEventPhotos(evt);
+    const photosJson = JSON.stringify(photos).replace(/"/g, '&quot;');
+    return `
+      <tr class="hover:bg-dark-700/50 transition duration-150">
+        <td class="px-4 py-3">
+          ${photos.length > 0 ? `
+            <div class="w-12 h-12 rounded-xl overflow-hidden bg-dark-900 cursor-pointer group relative border border-slate-700" onclick="openLightboxCarousel(${photosJson}, 0, '${escapeHtml(evt.name)}')">
+              <img src="${escapeHtml(photos[0])}" alt="Thumb" class="w-full h-full object-cover group-hover:scale-110 transition duration-200">
+              ${photos.length > 1 ? `
+                <div class="absolute bottom-0.5 right-0.5 bg-black/80 px-1 py-0.2 rounded text-[9px] font-black text-white">
+                  +${photos.length - 1}
+                </div>
+              ` : ''}
+            </div>
+          ` : `
+            <div class="w-12 h-12 rounded-xl bg-dark-700/60 border border-slate-700 flex items-center justify-center text-slate-500">
+              <i data-lucide="image" class="w-5 h-5"></i>
+            </div>
+          `}
+        </td>
+        <td class="px-4 py-3">
+          <div class="font-bold text-white">${escapeHtml(evt.name)}</div>
+          <div class="text-xs text-slate-400 line-clamp-1">${escapeHtml(evt.description || 'No description')}</div>
+        </td>
+        <td class="px-4 py-3">
+          <button onclick="switchTab('map'); selectLocationById('${evt.location_id}')" class="text-brand-300 hover:text-brand-200 font-medium text-xs flex items-center gap-1">
+            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-accent-400"></i> ${escapeHtml(evt.location_name || 'Location')}
+          </button>
+        </td>
+        <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
+          ${formatDate(evt.date)}
+        </td>
+        <td class="px-4 py-3">
+          <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 text-xs font-bold border border-amber-500/20">
+            <i data-lucide="star" class="w-3.5 h-3.5 fill-amber-400"></i>
+            <span>${Number(evt.score).toFixed(1)}</span>
           </div>
-        ` : `
-          <div class="w-12 h-12 rounded-xl bg-dark-700/60 border border-slate-700 flex items-center justify-center text-slate-500">
-            <i data-lucide="image" class="w-5 h-5"></i>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <button onclick="toggleFavorite('${evt.id}', event)" class="p-1 text-slate-400 hover:text-amber-400 transition" title="Toggle Favorite">
+            <i data-lucide="star" class="w-4 h-4 ${evt.favorite ? 'fill-amber-400 text-amber-400' : ''}"></i>
+          </button>
+        </td>
+        <td class="px-4 py-3 text-right whitespace-nowrap">
+          <div class="flex items-center justify-end gap-1.5">
+            <button onclick="openShareModal('${evt.id}')" class="p-1.5 rounded-lg bg-dark-700/60 hover:bg-dark-600 text-slate-300 hover:text-white transition" title="Share Event">
+              <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+            </button>
+            <button onclick="editEvent('${evt.id}')" class="p-1.5 rounded-lg bg-dark-700/60 hover:bg-dark-600 text-slate-300 hover:text-white transition" title="Edit Event">
+              <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+            </button>
+            <button onclick="deleteEvent('${evt.id}')" class="p-1.5 rounded-lg bg-dark-700/60 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition" title="Delete Event">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
           </div>
-        `}
-      </td>
-      <td class="px-4 py-3">
-        <div class="font-bold text-white">${escapeHtml(evt.name)}</div>
-        <div class="text-xs text-slate-400 line-clamp-1">${escapeHtml(evt.description || 'No description')}</div>
-      </td>
-      <td class="px-4 py-3">
-        <button onclick="switchTab('map'); selectLocationById('${evt.location_id}')" class="text-brand-300 hover:text-brand-200 font-medium text-xs flex items-center gap-1">
-          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-accent-400"></i> ${escapeHtml(evt.location_name || 'Location')}
-        </button>
-      </td>
-      <td class="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
-        ${formatDate(evt.date)}
-      </td>
-      <td class="px-4 py-3">
-        <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 text-xs font-bold border border-amber-500/20">
-          <i data-lucide="star" class="w-3.5 h-3.5 fill-amber-400"></i>
-          <span>${Number(evt.score).toFixed(1)}</span>
-        </div>
-      </td>
-      <td class="px-4 py-3 text-center">
-        <button onclick="toggleFavorite('${evt.id}', event)" class="p-1 text-slate-400 hover:text-amber-400 transition" title="Toggle Favorite">
-          <i data-lucide="star" class="w-4 h-4 ${evt.favorite ? 'fill-amber-400 text-amber-400' : ''}"></i>
-        </button>
-      </td>
-      <td class="px-4 py-3 text-right whitespace-nowrap">
-        <div class="flex items-center justify-end gap-1.5">
-          <button onclick="openShareModal('${evt.id}')" class="p-1.5 rounded-lg bg-dark-700/60 hover:bg-dark-600 text-slate-300 hover:text-white transition" title="Share Event">
-            <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
-          </button>
-          <button onclick="editEvent('${evt.id}')" class="p-1.5 rounded-lg bg-dark-700/60 hover:bg-dark-600 text-slate-300 hover:text-white transition" title="Edit Event">
-            <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
-          </button>
-          <button onclick="deleteEvent('${evt.id}')" class="p-1.5 rounded-lg bg-dark-700/60 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition" title="Delete Event">
-            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-          </button>
-        </div>
-      </td>
-    </tr>
-  `).join('');
+        </td>
+      </tr>
+    `;
+  }).join('');
 
   initIcons();
 }
@@ -1403,7 +1351,6 @@ function computeKPIsFromState(locs = [], evts = []) {
 
   const eventsPerLocation = totalLocations > 0 ? totalEvents / totalLocations : 0;
 
-  // Calculate per-location stats from live in-memory state
   const locStats = locs.map(l => {
     const locEvts = evts.filter(e => e.location_id === l.id);
     const avg = locEvts.length > 0
@@ -1417,16 +1364,13 @@ function computeKPIsFromState(locs = [], evts = []) {
     };
   });
 
-  // Favorite location by score (highest average score with at least 1 event)
   const withEvents = locStats.filter(l => l.event_count >= 1);
   withEvents.sort((a, b) => b.avg_score - a.avg_score || b.event_count - a.event_count);
   const favoriteByScore = withEvents.length > 0 ? withEvents[0] : null;
 
-  // Most frequented location (highest event count)
   const byFreq = [...locStats].sort((a, b) => b.event_count - a.event_count || b.avg_score - a.avg_score);
   const mostFrequented = byFreq.length > 0 && byFreq[0].event_count > 0 ? byFreq[0] : null;
 
-  // Category breakdown
   const catMap = {};
   locStats.forEach(l => {
     const cat = l.category || 'Other';
@@ -1443,7 +1387,6 @@ function computeKPIsFromState(locs = [], evts = []) {
     avg_score: c.event_count > 0 ? c.total_score / c.event_count : 0
   })).sort((a, b) => b.event_count - a.event_count);
 
-  // Score distribution
   const scoreDistribution = [
     { range: '9.0 - 10.0', count: evts.filter(e => parseFloat(e.score) >= 9.0).length },
     { range: '7.0 - 8.9', count: evts.filter(e => parseFloat(e.score) >= 7.0 && parseFloat(e.score) < 9.0).length },
@@ -1467,6 +1410,7 @@ function computeKPIsFromState(locs = [], evts = []) {
 }
 
 function loadKPIs() {
+  if (!state.currentUser) return;
   state.kpis = computeKPIsFromState(state.locations, state.events);
   renderKPIDashboard(state.kpis);
 }
@@ -1646,44 +1590,36 @@ function renderFavoritesGrid(events) {
 
   if (empty) empty.classList.add('hidden');
 
-  grid.innerHTML = events.map(evt => `
-    <div class="bg-dark-800 rounded-2xl overflow-hidden border border-slate-700/80 shadow-xl flex flex-col hover:border-amber-500/40 transition duration-300 group">
-      <div class="h-48 bg-dark-950 relative overflow-hidden">
-        ${evt.photo_url ? `
-          <img src="${escapeHtml(evt.photo_url)}" alt="${escapeHtml(evt.name)}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500 cursor-pointer" onclick="openLightbox('${escapeHtml(evt.photo_url)}', '${escapeHtml(evt.name)}')">
-        ` : `
-          <div class="w-full h-full flex items-center justify-center text-slate-600 bg-dark-900">
-            <i data-lucide="image" class="w-12 h-12"></i>
+  grid.innerHTML = events.map(evt => {
+    const photos = getEventPhotos(evt);
+    return `
+      <div class="bg-dark-800 rounded-3xl overflow-hidden border border-slate-700/80 shadow-xl flex flex-col hover:border-amber-500/40 transition duration-300 group">
+        ${renderInstagramCarousel(photos, evt.name, 'h-52')}
+
+        <div class="p-5 flex-1 flex flex-col justify-between">
+          <div>
+            <h3 class="font-bold text-lg text-white mb-1 leading-snug">${escapeHtml(evt.name)}</h3>
+            <p class="text-xs text-brand-400 font-medium flex items-center gap-1 mb-3">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> ${escapeHtml(evt.location_name || 'Spot')}
+            </p>
+            <p class="text-xs text-slate-300 line-clamp-3 mb-4 italic">"${escapeHtml(evt.description || 'No notes added.')}"</p>
           </div>
-        `}
-        <div class="absolute top-3 right-3 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md text-amber-400 text-xs font-extrabold flex items-center gap-1 border border-amber-500/30">
-          <i data-lucide="star" class="w-3.5 h-3.5 fill-amber-400"></i> ${Number(evt.score).toFixed(1)}
-        </div>
-      </div>
 
-      <div class="p-5 flex-1 flex flex-col justify-between">
-        <div>
-          <h3 class="font-bold text-lg text-white mb-1 leading-snug">${escapeHtml(evt.name)}</h3>
-          <p class="text-xs text-brand-400 font-medium flex items-center gap-1 mb-3">
-            <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> ${escapeHtml(evt.location_name || 'Spot')}
-          </p>
-          <p class="text-xs text-slate-300 line-clamp-3 mb-4 italic">"${escapeHtml(evt.description || 'No notes added.')}"</p>
-        </div>
-
-        <div class="pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
-          <span>${formatDate(evt.date)}</span>
-          <div class="flex items-center gap-2">
-            <button onclick="openShareModal('${evt.id}')" class="p-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-slate-300 transition" title="Share">
-              <i data-lucide="share-2" class="w-4 h-4"></i>
-            </button>
-            <button onclick="toggleFavorite('${evt.id}', event)" class="p-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-amber-400 transition" title="Unfavorite">
-              <i data-lucide="star" class="w-4 h-4 fill-amber-400"></i>
-            </button>
+          <div class="pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
+            <span>${formatDate(evt.date)}</span>
+            <div class="flex items-center gap-2">
+              <button onclick="openShareModal('${evt.id}')" class="p-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-slate-300 transition" title="Share">
+                <i data-lucide="share-2" class="w-4 h-4"></i>
+              </button>
+              <button onclick="toggleFavorite('${evt.id}', event)" class="p-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-amber-400 transition" title="Unfavorite">
+                <i data-lucide="star" class="w-4 h-4 fill-amber-400"></i>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   initIcons();
 }
@@ -1728,6 +1664,53 @@ function openAddLocationModal(lat = null, lng = null) {
   }
 
   openModal('modal-location');
+}
+
+function editLocation(id) {
+  const loc = state.locations.find(l => l.id === id);
+  if (!loc) return;
+
+  document.getElementById('location-modal-title').innerHTML = `<i data-lucide="edit-3" class="w-5 h-5 text-brand-400"></i> Edit Location`;
+  document.getElementById('loc-input-id').value = loc.id;
+  document.getElementById('loc-input-name').value = loc.name;
+  document.getElementById('loc-input-address').value = loc.address || '';
+  document.getElementById('loc-input-notes').value = loc.notes || '';
+  document.getElementById('loc-input-category').value = loc.category || 'Other';
+  document.getElementById('loc-input-lat').value = parseFloat(loc.lat).toFixed(6);
+  document.getElementById('loc-input-lng').value = parseFloat(loc.lng).toFixed(6);
+
+  openModal('modal-location');
+}
+
+async function deleteLocation(locationId, locationName = 'this location') {
+  const confirmMsg = `Are you sure you want to delete "${locationName}"?\n\n⚠️ WARNING: All events and photos logged at this location will be permanently deleted as well.`;
+  if (!confirm(confirmMsg)) return;
+
+  if (state.supabase) {
+    showToast('Deleting location & events...', 'info');
+    await state.supabase.from('events').delete().eq('location_id', locationId);
+    const { error } = await state.supabase.from('locations').delete().eq('id', locationId);
+    if (error) {
+      showToast(error.message, 'error');
+      return;
+    }
+    closeLocationDrawer();
+    closeModal('modal-location');
+    showToast(`"${locationName}" and all associated events deleted! 🗑️`, 'info');
+    loadAllData();
+    return;
+  }
+
+  const uid = state.currentUser ? state.currentUser.id : null;
+  let locs = ClientDB.getLocations(uid).filter(l => l.id !== locationId);
+  let evts = ClientDB.getEvents(uid).filter(e => e.location_id !== locationId);
+  ClientDB.saveLocations(locs, uid);
+  ClientDB.saveEvents(evts, uid);
+
+  closeLocationDrawer();
+  closeModal('modal-location');
+  showToast(`"${locationName}" and all associated events deleted! 🗑️`, 'info');
+  loadAllData();
 }
 
 function handleLocationSubmit(e) {
@@ -1807,6 +1790,9 @@ function setDefaultEventDate() {
   }
 }
 
+// ==========================================
+// MULTI-PHOTO EVENT MODAL MANAGEMENT
+// ==========================================
 function openAddEventModal(locationId = null) {
   if (!state.currentUser) {
     openAuthModal('login');
@@ -1820,7 +1806,8 @@ function openAddEventModal(locationId = null) {
   document.getElementById('evt-input-score').value = '9.0';
   document.getElementById('score-display-val').innerText = '9.0';
   document.getElementById('evt-input-favorite').checked = false;
-  removeSelectedPhoto();
+  state.modalPhotos = [];
+  renderPhotoThumbnailsGrid();
   setDefaultEventDate();
 
   if (locationId) {
@@ -1844,13 +1831,62 @@ function editEvent(id) {
   document.getElementById('score-display-val').innerText = Number(evt.score).toFixed(1);
   document.getElementById('evt-input-favorite').checked = evt.favorite === 1 || evt.favorite === true;
 
-  if (evt.photo_url) {
-    setPhotoPreview(evt.photo_url);
-  } else {
-    removeSelectedPhoto();
-  }
+  state.modalPhotos = getEventPhotos(evt);
+  renderPhotoThumbnailsGrid();
 
   openModal('modal-event');
+}
+
+function renderPhotoThumbnailsGrid() {
+  const grid = document.getElementById('photo-thumbnails-grid');
+  const countBadge = document.getElementById('photo-count-badge');
+  if (!grid) return;
+
+  const count = state.modalPhotos.length;
+  if (countBadge) {
+    if (count > 0) {
+      countBadge.innerText = `${count} photo${count === 1 ? '' : 's'} attached`;
+      countBadge.classList.remove('hidden');
+    } else {
+      countBadge.classList.add('hidden');
+    }
+  }
+
+  if (count === 0) {
+    grid.innerHTML = '';
+    return;
+  }
+
+  grid.innerHTML = state.modalPhotos.map((url, idx) => `
+    <div class="relative h-20 rounded-xl overflow-hidden bg-dark-950 border border-slate-700 group">
+      <img src="${escapeHtml(url)}" alt="Photo ${idx + 1}" class="w-full h-full object-cover">
+      <button type="button" onclick="removePhotoAtIndex(${idx})" class="absolute top-1 right-1 p-1 bg-black/75 hover:bg-red-600 text-white rounded-full transition shadow" title="Remove Photo">
+        <i data-lucide="x" class="w-3 h-3"></i>
+      </button>
+      <span class="absolute bottom-1 left-1 px-1.5 py-0.2 rounded bg-black/70 text-[9px] font-bold text-slate-300">
+        #${idx + 1}
+      </span>
+    </div>
+  `).join('');
+
+  initIcons();
+}
+
+function removePhotoAtIndex(index) {
+  state.modalPhotos.splice(index, 1);
+  renderPhotoThumbnailsGrid();
+}
+
+function addPhotoUrlFromInput() {
+  const input = document.getElementById('evt-input-photo-url');
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val) return;
+
+  state.modalPhotos.push(val);
+  input.value = '';
+  renderPhotoThumbnailsGrid();
+  showToast('Photo URL added!', 'success');
 }
 
 function compressImageFile(file, maxWidth = 1200, quality = 0.82) {
@@ -1885,66 +1921,39 @@ function compressImageFile(file, maxWidth = 1200, quality = 0.82) {
   });
 }
 
-async function handlePhotoFileSelected(input) {
-  if (!input.files || !input.files[0]) return;
-  const file = input.files[0];
+async function handleMultiplePhotosSelected(input) {
+  if (!input.files || input.files.length === 0) return;
+  const files = Array.from(input.files);
 
-  showToast('Processing photo...', 'info');
-  const compressedDataUrl = await compressImageFile(file);
-  if (compressedDataUrl) {
-    setPhotoPreview(compressedDataUrl);
-  }
+  showToast(`Processing ${files.length} photo${files.length === 1 ? '' : 's'}...`, 'info');
 
-  if (state.supabase) {
-    try {
-      const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
-      state.supabase.storage.from('photos').upload(filename, file, { upsert: true }).then(({ data, error }) => {
-        if (!error) {
-          const { data: publicUrlData } = state.supabase.storage.from('photos').getPublicUrl(filename);
-          if (publicUrlData && publicUrlData.publicUrl) {
-            setPhotoPreview(publicUrlData.publicUrl);
-            showToast('Photo uploaded to Cloud Storage! 📸', 'success');
+  for (const file of files) {
+    const compressedDataUrl = await compressImageFile(file);
+    if (compressedDataUrl) {
+      state.modalPhotos.push(compressedDataUrl);
+      renderPhotoThumbnailsGrid();
+
+      // Parallel upload to Supabase storage if available
+      if (state.supabase) {
+        const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+        state.supabase.storage.from('photos').upload(filename, file, { upsert: true }).then(({ data, error }) => {
+          if (!error) {
+            const { data: publicUrlData } = state.supabase.storage.from('photos').getPublicUrl(filename);
+            if (publicUrlData && publicUrlData.publicUrl) {
+              const idx = state.modalPhotos.indexOf(compressedDataUrl);
+              if (idx !== -1) {
+                state.modalPhotos[idx] = publicUrlData.publicUrl;
+                renderPhotoThumbnailsGrid();
+              }
+            }
           }
-        } else {
-          showToast('Photo attached & ready to save! 📸', 'success');
-        }
-      }).catch(() => {
-        showToast('Photo attached & ready to save! 📸', 'success');
-      });
-    } catch (e) {
-      showToast('Photo attached & ready to save! 📸', 'success');
+        }).catch(() => {});
+      }
     }
-  } else {
-    showToast('Photo attached & ready to save! 📸', 'success');
   }
-}
 
-function handlePhotoUrlInput(val) {
-  if (val && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:image') || val.startsWith('/uploads/'))) {
-    setPhotoPreview(val);
-  }
-}
-
-function setPhotoPreview(url) {
-  const container = document.getElementById('photo-preview-container');
-  const img = document.getElementById('photo-preview-img');
-  const urlInput = document.getElementById('evt-input-photo-url');
-  if (container && img) {
-    img.src = url;
-    container.classList.remove('hidden');
-    if (urlInput) urlInput.value = url;
-  }
-}
-
-function removeSelectedPhoto() {
-  const container = document.getElementById('photo-preview-container');
-  const img = document.getElementById('photo-preview-img');
-  const urlInput = document.getElementById('evt-input-photo-url');
-  const fileInput = document.getElementById('evt-input-file');
-  if (container) container.classList.add('hidden');
-  if (img) img.src = '';
-  if (urlInput) urlInput.value = '';
-  if (fileInput) fileInput.value = '';
+  input.value = '';
+  showToast(`${files.length} photo${files.length === 1 ? '' : 's'} added! 📸`, 'success');
 }
 
 function handleEventSubmit(e) {
@@ -1955,8 +1964,10 @@ function handleEventSubmit(e) {
   const date = document.getElementById('evt-input-date').value;
   const score = parseFloat(document.getElementById('evt-input-score').value);
   const description = document.getElementById('evt-input-description').value;
-  const photo_url = document.getElementById('evt-input-photo-url').value;
   const favorite = document.getElementById('evt-input-favorite').checked ? 1 : 0;
+
+  // Serialize photos as JSON array string
+  const photo_url = JSON.stringify(state.modalPhotos);
 
   const payload = { location_id, name, date, score, description, photo_url, favorite };
 
@@ -1967,7 +1978,7 @@ function handleEventSubmit(e) {
         showToast(error.message, 'error');
       } else {
         closeModal('modal-event');
-        showToast('Event saved to Cloud! ⭐', 'success');
+        showToast('Event and photos saved to Cloud! ⭐', 'success');
         loadAllData();
         if (state.selectedLocation && state.selectedLocation.id === location_id) {
           openLocationDrawer(state.selectedLocation);
@@ -2080,8 +2091,9 @@ function openShareModal(eventId) {
   document.getElementById('share-desc').innerText = evt.description || 'No notes added.';
   document.getElementById('share-date').innerText = formatDate(evt.date);
   
+  const photos = getEventPhotos(evt);
   const img = document.getElementById('share-img');
-  img.src = evt.photo_url || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80';
+  img.src = photos.length > 0 ? photos[0] : 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80';
 
   openModal('modal-share');
 }
@@ -2112,14 +2124,6 @@ function copyShareText() {
   });
 }
 
-function openLightbox(url, caption) {
-  const img = document.getElementById('lightbox-img');
-  const cap = document.getElementById('lightbox-caption');
-  if (img) img.src = url;
-  if (cap) cap.innerText = caption || '';
-  openModal('modal-lightbox');
-}
-
 // ==========================================
 // EXPORTS (JSON & CSV)
 // ==========================================
@@ -2145,18 +2149,22 @@ function exportDataJSON() {
 
 function exportEventsCSV() {
   const events = state.events;
-  const headers = ['ID', 'Event Name', 'Location', 'Category', 'Date', 'Score', 'Favorite', 'Description', 'Photo URL'];
-  const rows = events.map(e => [
-    `"${e.id}"`,
-    `"${escapeCsv(e.name)}"`,
-    `"${escapeCsv(e.location_name)}"`,
-    `"${escapeCsv(e.location_category || '')}"`,
-    `"${e.date}"`,
-    e.score,
-    e.favorite ? 'Yes' : 'No',
-    `"${escapeCsv(e.description || '')}"`,
-    `"${e.photo_url || ''}"`
-  ]);
+  const headers = ['ID', 'Event Name', 'Location', 'Category', 'Date', 'Score', 'Favorite', 'Description', 'Photos Count', 'Photo URLs'];
+  const rows = events.map(e => {
+    const photos = getEventPhotos(e);
+    return [
+      `"${e.id}"`,
+      `"${escapeCsv(e.name)}"`,
+      `"${escapeCsv(e.location_name)}"`,
+      `"${escapeCsv(e.location_category || '')}"`,
+      `"${e.date}"`,
+      e.score,
+      e.favorite ? 'Yes' : 'No',
+      `"${escapeCsv(e.description || '')}"`,
+      photos.length,
+      `"${escapeCsv(photos.join(' ; '))}"`
+    ];
+  });
 
   const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
