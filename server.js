@@ -56,6 +56,7 @@ db.exec(`
     description TEXT,
     score REAL NOT NULL DEFAULT 5.0,
     photo_url TEXT,
+    audio_url TEXT,
     favorite INTEGER NOT NULL DEFAULT 0,
     tags TEXT,
     created_at INTEGER NOT NULL,
@@ -63,12 +64,15 @@ db.exec(`
   );
 `);
 
-// Migration helper: Add user_id column if older table didn't have it
+// Migration helper: Add user_id and audio_url columns if older table didn't have it
 try {
   db.exec('ALTER TABLE locations ADD COLUMN user_id TEXT;');
 } catch (e) {}
 try {
   db.exec('ALTER TABLE events ADD COLUMN user_id TEXT;');
+} catch (e) {}
+try {
+  db.exec('ALTER TABLE events ADD COLUMN audio_url TEXT;');
 } catch (e) {}
 
 // Indices (created after columns exist)
@@ -471,7 +475,7 @@ app.get('/api/events/:id', requireAuth, (req, res) => {
 
 app.post('/api/events', requireAuth, (req, res) => {
   try {
-    const { location_id, name, date, description, score, photo_url, favorite, tags } = req.body;
+    const { location_id, name, date, description, score, photo_url, audio_url, favorite, tags } = req.body;
     if (!location_id || !name || !date) {
       return res.status(400).json({ error: 'Location ID, Event Name, and Date are required.' });
     }
@@ -486,10 +490,10 @@ app.post('/api/events', requireAuth, (req, res) => {
     const favVal = favorite === true || favorite === 1 || favorite === '1' ? 1 : 0;
 
     const insert = db.prepare(`
-      INSERT INTO events (id, user_id, location_id, name, date, description, score, photo_url, favorite, tags, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO events (id, user_id, location_id, name, date, description, score, photo_url, audio_url, favorite, tags, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    insert.run(id, req.user.id, location_id, name.trim(), date, description || '', scoreVal, photo_url || '', favVal, tags || '', now, now);
+    insert.run(id, req.user.id, location_id, name.trim(), date, description || '', scoreVal, photo_url || '', audio_url || '', favVal, tags || '', now, now);
 
     const newEvent = db.prepare(`
       SELECT e.*, l.name as location_name 
@@ -506,7 +510,7 @@ app.post('/api/events', requireAuth, (req, res) => {
 app.put('/api/events/:id', requireAuth, (req, res) => {
   try {
     const { id } = req.params;
-    const { location_id, name, date, description, score, photo_url, favorite, tags } = req.body;
+    const { location_id, name, date, description, score, photo_url, audio_url, favorite, tags } = req.body;
     const existing = db.prepare('SELECT * FROM events WHERE id = ? AND user_id = ?').get(id, req.user.id);
     if (!existing) {
       return res.status(404).json({ error: 'Event not found' });
@@ -514,7 +518,7 @@ app.put('/api/events/:id', requireAuth, (req, res) => {
     const now = Date.now();
     const update = db.prepare(`
       UPDATE events 
-      SET location_id = ?, name = ?, date = ?, description = ?, score = ?, photo_url = ?, favorite = ?, tags = ?, updated_at = ?
+      SET location_id = ?, name = ?, date = ?, description = ?, score = ?, photo_url = ?, audio_url = ?, favorite = ?, tags = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
     `);
     update.run(
@@ -524,6 +528,7 @@ app.put('/api/events/:id', requireAuth, (req, res) => {
       description !== undefined ? description : existing.description,
       score !== undefined ? parseFloat(score) : existing.score,
       photo_url !== undefined ? photo_url : existing.photo_url,
+      audio_url !== undefined ? audio_url : (existing.audio_url || ''),
       favorite !== undefined ? (favorite === true || favorite === 1 || favorite === '1' ? 1 : 0) : existing.favorite,
       tags !== undefined ? tags : existing.tags,
       now,

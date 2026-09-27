@@ -933,6 +933,79 @@
           </div>
         </div>
 
+        <!-- AUDIO VOICE NOTES RECORDER -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <i data-lucide="mic" class="w-3.5 h-3.5 text-brand-400"></i> Audio Voice Note
+            </label>
+            <span id="audio-status-badge" class="text-xs text-brand-300 font-bold hidden">Audio Attached</span>
+          </div>
+
+          <!-- AUDIO RECORDER CARD -->
+          <div class="bg-dark-900 border border-slate-700 rounded-2xl p-3.5 flex flex-col gap-3">
+            
+            <!-- STATE 1: IDLE / READY TO RECORD -->
+            <div id="audio-idle-state" class="flex items-center justify-between gap-3">
+              <button type="button" onclick="startAudioRecording()" class="flex-1 py-2.5 px-4 rounded-xl bg-dark-800 hover:bg-dark-700 border border-slate-600 hover:border-brand-500 text-slate-200 text-xs font-bold flex items-center justify-center gap-2 transition group">
+                <i data-lucide="mic" class="w-4 h-4 text-brand-400 group-hover:scale-110 transition"></i>
+                <span>Record Voice Note</span>
+              </button>
+              
+              <label class="py-2.5 px-3 rounded-xl bg-dark-800 hover:bg-dark-700 border border-slate-600 text-slate-300 text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition shrink-0" title="Upload Audio File">
+                <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">Upload</span>
+                <input type="file" id="evt-input-audio-file" accept="audio/*" class="hidden" onchange="handleAudioFileSelected(this)">
+              </label>
+            </div>
+
+            <!-- STATE 2: RECORDING IN PROGRESS -->
+            <div id="audio-recording-state" class="hidden flex items-center justify-between p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+              <div class="flex items-center gap-2.5">
+                <span class="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+                <div>
+                  <div class="text-xs font-bold text-red-400 flex items-center gap-1.5">
+                    <span>Recording audio...</span>
+                  </div>
+                  <div class="text-xs font-mono font-bold text-white" id="audio-recording-timer">00:00</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="stopAudioRecording()" class="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-1 shadow">
+                  <i data-lucide="square" class="w-3.5 h-3.5 fill-white"></i> Stop
+                </button>
+                <button type="button" onclick="cancelAudioRecording()" class="p-1.5 text-slate-400 hover:text-white" title="Cancel">
+                  <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- STATE 3: AUDIO PLAYBACK ATTACHED -->
+            <div id="audio-attached-state" class="hidden flex items-center justify-between p-3 bg-brand-950/40 border border-brand-500/30 rounded-xl">
+              <div class="flex items-center gap-3 flex-1 mr-2">
+                <button type="button" id="modal-audio-play-btn" onclick="toggleModalAudioPlayback()" class="w-9 h-9 rounded-full bg-brand-600 hover:bg-brand-500 text-white flex items-center justify-center shrink-0 shadow">
+                  <i data-lucide="play" class="w-4 h-4 ml-0.5" id="modal-play-icon"></i>
+                </button>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between text-xs text-brand-300 font-semibold mb-1">
+                    <span>Voice Note Preview</span>
+                    <span id="modal-audio-time">0:00</span>
+                  </div>
+                  <div class="w-full bg-slate-700/60 rounded-full h-1.5 overflow-hidden">
+                    <div id="modal-audio-prog" class="bg-brand-500 h-full rounded-full w-0 transition-all duration-100"></div>
+                  </div>
+                </div>
+                <audio id="modal-audio-player" class="hidden" ontimeupdate="updateModalAudioProgress(this)" onended="resetModalAudioPlayer()"></audio>
+              </div>
+              
+              <button type="button" onclick="removeAttachedAudio()" class="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition" title="Delete Audio Note">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+          </div>
+        </div>
+
         <div>
           <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Description & Review</label>
           <textarea id="evt-input-description" rows="3" placeholder="What made this event memorable? Highlights, prices, company..." class="w-full bg-dark-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-brand-500 transition"></textarea>
@@ -1033,6 +1106,6 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <script src="./app.js?v=110"></script>
+  <script src="./app.js?v=130"></script>
 </body>
 </html>

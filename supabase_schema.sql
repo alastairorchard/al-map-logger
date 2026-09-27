@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS public.events (
   description TEXT,
   score NUMERIC NOT NULL DEFAULT 5.0,
   photo_url TEXT,
+  audio_url TEXT,
   favorite INTEGER DEFAULT 0,
   tags TEXT,
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,

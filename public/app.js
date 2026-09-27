@@ -1,4 +1,4 @@
-// AL - Map & Event Logger (Instagram-Style Visual Gallery, Multi-User Cloud Sync)
+// AL - Map & Event Logger (Multi-Photo Instagram Carousel, Voice Notes Audio Recording, Multi-User Cloud Sync)
 
 const DEFAULT_SUPABASE_URL = 'https://bfwlzobdpbuippfbbjud.supabase.co';
 const DEFAULT_SUPABASE_KEY = 'sb_publishable_PcDpOFZptvEbE0wL8qDyLA_uqqkkf0A';
@@ -26,6 +26,14 @@ let state = {
     key: DEFAULT_SUPABASE_KEY
   },
   modalPhotos: [],
+  modalAudio: null, // Audio note Data URL or Cloud URL
+  audioRecorder: {
+    mediaRecorder: null,
+    audioChunks: [],
+    stream: null,
+    timerInterval: null,
+    secondsElapsed: 0
+  },
   lightbox: {
     photos: [],
     currentIndex: 0,
@@ -100,6 +108,269 @@ function getEventPhotos(evt) {
 }
 
 // ==========================================
+// AUDIO VOICE RECORDER & PLAYBACK LOGIC
+// ==========================================
+async function startAudioRecording() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('Audio recording is not supported in this browser.', 'error');
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.audioRecorder.stream = stream;
+    state.audioRecorder.audioChunks = [];
+    state.audioRecorder.secondsElapsed = 0;
+
+    let mimeType = 'audio/webm';
+    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+      mimeType = 'audio/webm;codecs=opus';
+    } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+      mimeType = 'audio/mp4';
+    } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+      mimeType = 'audio/ogg';
+    }
+
+    const mediaRecorder = new MediaRecorder(stream, { mimeType });
+    state.audioRecorder.mediaRecorder = mediaRecorder;
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        state.audioRecorder.audioChunks.push(e.data);
+      }
+    };
+
+    mediaRecorder.onstop = () => {
+      const audioBlob = new Blob(state.audioRecorder.audioChunks, { type: mimeType });
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setModalAudioAttachment(e.target.result);
+        showToast('Voice note recorded! 🎙️', 'success');
+      };
+      reader.readAsDataURL(audioBlob);
+
+      // Stop mic tracks
+      if (state.audioRecorder.stream) {
+        state.audioRecorder.stream.getTracks().forEach(t => t.stop());
+      }
+    };
+
+    mediaRecorder.start(250);
+
+    // UI state: Recording active
+    document.getElementById('audio-idle-state').classList.add('hidden');
+    document.getElementById('audio-attached-state').classList.add('hidden');
+    document.getElementById('audio-recording-state').classList.remove('hidden');
+
+    // Timer interval
+    const timerEl = document.getElementById('audio-recording-timer');
+    state.audioRecorder.timerInterval = setInterval(() => {
+      state.audioRecorder.secondsElapsed += 1;
+      const mins = String(Math.floor(state.audioRecorder.secondsElapsed / 60)).padStart(2, '0');
+      const secs = String(state.audioRecorder.secondsElapsed % 60).padStart(2, '0');
+      if (timerEl) timerEl.innerText = `${mins}:${secs}`;
+    }, 1000);
+
+    initIcons();
+  } catch (err) {
+    showToast('Microphone access denied: ' + err.message, 'error');
+  }
+}
+
+function stopAudioRecording() {
+  if (state.audioRecorder.mediaRecorder && state.audioRecorder.mediaRecorder.state === 'recording') {
+    state.audioRecorder.mediaRecorder.stop();
+  }
+  clearInterval(state.audioRecorder.timerInterval);
+}
+
+function cancelAudioRecording() {
+  if (state.audioRecorder.mediaRecorder && state.audioRecorder.mediaRecorder.state === 'recording') {
+    state.audioRecorder.mediaRecorder.ondataavailable = null;
+    state.audioRecorder.mediaRecorder.onstop = null;
+    state.audioRecorder.mediaRecorder.stop();
+  }
+  if (state.audioRecorder.stream) {
+    state.audioRecorder.stream.getTracks().forEach(t => t.stop());
+  }
+  clearInterval(state.audioRecorder.timerInterval);
+
+  document.getElementById('audio-recording-state').classList.add('hidden');
+  document.getElementById('audio-idle-state').classList.remove('hidden');
+}
+
+function handleAudioFileSelected(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+
+  showToast('Processing audio file...', 'info');
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    setModalAudioAttachment(e.target.result);
+    showToast('Audio file attached! 🎙️', 'success');
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function setModalAudioAttachment(audioDataUrl) {
+  state.modalAudio = audioDataUrl;
+
+  const player = document.getElementById('modal-audio-player');
+  if (player) {
+    player.src = audioDataUrl;
+    player.load();
+  }
+
+  document.getElementById('audio-recording-state').classList.add('hidden');
+  document.getElementById('audio-idle-state').classList.add('hidden');
+  document.getElementById('audio-attached-state').classList.remove('hidden');
+
+  const badge = document.getElementById('audio-status-badge');
+  if (badge) badge.classList.remove('hidden');
+
+  initIcons();
+}
+
+function removeAttachedAudio() {
+  state.modalAudio = null;
+  const player = document.getElementById('modal-audio-player');
+  if (player) {
+    player.pause();
+    player.src = '';
+  }
+
+  document.getElementById('audio-attached-state').classList.add('hidden');
+  document.getElementById('audio-recording-state').classList.add('hidden');
+  document.getElementById('audio-idle-state').classList.remove('hidden');
+
+  const badge = document.getElementById('audio-status-badge');
+  if (badge) badge.classList.add('hidden');
+}
+
+function toggleModalAudioPlayback() {
+  const player = document.getElementById('modal-audio-player');
+  const icon = document.getElementById('modal-play-icon');
+  if (!player) return;
+
+  if (player.paused) {
+    player.play();
+    if (icon) icon.setAttribute('data-lucide', 'pause');
+  } else {
+    player.pause();
+    if (icon) icon.setAttribute('data-lucide', 'play');
+  }
+  initIcons();
+}
+
+function updateModalAudioProgress(player) {
+  const prog = document.getElementById('modal-audio-prog');
+  const timeEl = document.getElementById('modal-audio-time');
+  if (player.duration) {
+    const pct = (player.currentTime / player.duration) * 100;
+    if (prog) prog.style.width = `${pct}%`;
+
+    const mins = Math.floor(player.currentTime / 60);
+    const secs = String(Math.floor(player.currentTime % 60)).padStart(2, '0');
+    const dMins = Math.floor(player.duration / 60);
+    const dSecs = String(Math.floor(player.duration % 60)).padStart(2, '0');
+    if (timeEl) timeEl.innerText = `${mins}:${secs} / ${dMins}:${dSecs}`;
+  }
+}
+
+function resetModalAudioPlayer() {
+  const icon = document.getElementById('modal-play-icon');
+  const prog = document.getElementById('modal-audio-prog');
+  if (icon) icon.setAttribute('data-lucide', 'play');
+  if (prog) prog.style.width = '0%';
+  initIcons();
+}
+
+// ==========================================
+// RENDER EVENT AUDIO NOTE PLAYER COMPONENT
+// ==========================================
+function renderAudioPlayerComponent(audioUrl, eventId) {
+  if (!audioUrl) return '';
+
+  const playerId = `audio_player_${eventId}`;
+  return `
+    <div class="flex items-center gap-3 p-3 rounded-2xl bg-brand-950/60 border border-brand-500/40 text-white mt-2 shadow-md select-none">
+      <button type="button" id="btn-${playerId}" onclick="event.stopPropagation(); togglePlayAudio('${playerId}')" class="w-9 h-9 rounded-full bg-brand-600 hover:bg-brand-500 text-white flex items-center justify-center shrink-0 shadow-lg transition active:scale-95">
+        <i data-lucide="play" class="w-4 h-4 ml-0.5" id="icon-${playerId}"></i>
+      </button>
+
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between text-[11px] text-brand-300 font-bold mb-1">
+          <span class="flex items-center gap-1.5"><i data-lucide="mic" class="w-3.5 h-3.5"></i> Voice Note</span>
+          <span id="time-${playerId}" class="font-mono text-[10px] text-slate-300">0:00</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden cursor-pointer" onclick="event.stopPropagation(); seekAudio(event, '${playerId}')">
+          <div id="prog-${playerId}" class="bg-gradient-to-r from-brand-500 to-accent-400 h-full rounded-full w-0 transition-all duration-100"></div>
+        </div>
+      </div>
+
+      <audio id="${playerId}" src="${escapeHtml(audioUrl)}" class="hidden" ontimeupdate="updateAudioProgress(this, '${playerId}')" onended="resetAudioPlayer('${playerId}')"></audio>
+    </div>
+  `;
+}
+
+function togglePlayAudio(playerId) {
+  const audio = document.getElementById(playerId);
+  const icon = document.getElementById(`icon-${playerId}`);
+  if (!audio) return;
+
+  // Pause all other playing audios
+  document.querySelectorAll('audio').forEach(a => {
+    if (a.id !== playerId && !a.paused) {
+      a.pause();
+      const otherIcon = document.getElementById(`icon-${a.id}`);
+      if (otherIcon) otherIcon.setAttribute('data-lucide', 'play');
+    }
+  });
+
+  if (audio.paused) {
+    audio.play();
+    if (icon) icon.setAttribute('data-lucide', 'pause');
+  } else {
+    audio.pause();
+    if (icon) icon.setAttribute('data-lucide', 'play');
+  }
+  initIcons();
+}
+
+function updateAudioProgress(audio, playerId) {
+  const prog = document.getElementById(`prog-${playerId}`);
+  const timeEl = document.getElementById(`time-${playerId}`);
+  if (audio.duration) {
+    const pct = (audio.currentTime / audio.duration) * 100;
+    if (prog) prog.style.width = `${pct}%`;
+
+    const mins = Math.floor(audio.currentTime / 60);
+    const secs = String(Math.floor(audio.currentTime % 60)).padStart(2, '0');
+    const dMins = Math.floor(audio.duration / 60);
+    const dSecs = String(Math.floor(audio.duration % 60)).padStart(2, '0');
+    if (timeEl) timeEl.innerText = `${mins}:${secs} / ${dMins}:${dSecs}`;
+  }
+}
+
+function seekAudio(e, playerId) {
+  const audio = document.getElementById(playerId);
+  if (!audio || !audio.duration) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const pct = clickX / rect.width;
+  audio.currentTime = pct * audio.duration;
+}
+
+function resetAudioPlayer(playerId) {
+  const icon = document.getElementById(`icon-${playerId}`);
+  const prog = document.getElementById(`prog-${playerId}`);
+  if (icon) icon.setAttribute('data-lucide', 'play');
+  if (prog) prog.style.width = '0%';
+  initIcons();
+}
+
+// ==========================================
 // INSTAGRAM-STYLE PHOTO CAROUSEL GENERATOR
 // ==========================================
 function renderInstagramCarousel(photos, evtName, heightClass = 'h-52') {
@@ -121,7 +392,6 @@ function renderInstagramCarousel(photos, evtName, heightClass = 'h-52') {
 
   return `
     <div class="${heightClass} rounded-3xl overflow-hidden relative group bg-dark-950 border border-slate-700/60 shadow-inner select-none">
-      <!-- Horizontal Scroll Track with Snap -->
       <div id="${carouselId}" class="flex overflow-x-auto snap-x snap-mandatory scrollbar-none scroll-smooth w-full h-full" onscroll="handleCarouselScroll('${carouselId}', ${photos.length})">
         ${photos.map((url, idx) => `
           <div class="snap-center shrink-0 w-full h-full relative cursor-pointer" onclick="openLightboxCarousel(${photosJson}, ${idx}, '${escapeHtml(evtName)}')">
@@ -130,23 +400,19 @@ function renderInstagramCarousel(photos, evtName, heightClass = 'h-52') {
         `).join('')}
       </div>
 
-      <!-- Left Arrow Button (Desktop hover) -->
       <button type="button" onclick="event.stopPropagation(); scrollCarousel('${carouselId}', -1)" class="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition shadow-xl z-10">
         <i data-lucide="chevron-left" class="w-5 h-5"></i>
       </button>
 
-      <!-- Right Arrow Button (Desktop hover) -->
       <button type="button" onclick="event.stopPropagation(); scrollCarousel('${carouselId}', 1)" class="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-white opacity-0 group-hover:opacity-100 transition shadow-xl z-10">
         <i data-lucide="chevron-right" class="w-5 h-5"></i>
       </button>
 
-      <!-- Multi-photo count badge -->
-      <div class="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md text-xs font-bold text-white flex items-center gap-1.5 border border-white/20 z-10 pointer-events-none">
+      <div class="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/75 backdrop-blur-md text-xs font-bold text-white flex items-center gap-1.5 border border-white/20 z-10 pointer-events-none">
         <i data-lucide="layers" class="w-3.5 h-3.5 text-brand-300"></i>
         <span>1 / ${photos.length}</span>
       </div>
 
-      <!-- Instagram Pagination Dots -->
       <div id="${carouselId}-dots" class="absolute bottom-3 left-0 right-0 flex justify-center items-center gap-1.5 pointer-events-none z-10">
         ${photos.map((_, i) => `
           <span class="w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === 0 ? 'bg-white w-4' : 'bg-white/40'}"></span>
@@ -195,7 +461,6 @@ function loadGalleryFeed() {
 
   let events = [...state.events];
 
-  // Sort events (Highest score first by default)
   events.sort((a, b) => {
     if (sort === 'score') {
       return order === 'asc' ? parseFloat(a.score) - parseFloat(b.score) : parseFloat(b.score) - parseFloat(a.score);
@@ -227,7 +492,7 @@ function renderGalleryFeed(events) {
     return `
       <article class="bg-dark-800 rounded-3xl overflow-hidden border border-slate-700/80 shadow-2xl transition duration-300 hover:border-slate-600">
         
-        <!-- CARD HEADER (Location & Score Badge) -->
+        <!-- CARD HEADER -->
         <div class="px-5 py-3.5 flex items-center justify-between border-b border-slate-700/60 bg-dark-800/80">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-accent-500 text-white font-black text-sm flex items-center justify-center shadow">
@@ -252,17 +517,17 @@ function renderGalleryFeed(events) {
           </div>
         </div>
 
-        <!-- INSTAGRAM SWIPEABLE PHOTO CAROUSEL -->
+        <!-- PHOTO CAROUSEL -->
         <div class="p-2 sm:p-3 bg-dark-900/60">
           ${photos.length > 0 ? renderInstagramCarousel(photos, evt.name, 'h-80 sm:h-96 md:h-[420px]') : `
             <div class="h-64 rounded-3xl bg-dark-950 flex flex-col items-center justify-center text-slate-600 border border-slate-800">
               <i data-lucide="image" class="w-12 h-12 mb-2"></i>
-              <span class="text-xs text-slate-500">No photos attached to this event</span>
+              <span class="text-xs text-slate-500">No photos attached</span>
             </div>
           `}
         </div>
 
-        <!-- CARD FOOTER (Title, Actions & Notes) -->
+        <!-- CARD FOOTER (Actions, Title, Notes & Audio Voice Note Player) -->
         <div class="p-5 pt-3">
           <div class="flex items-center justify-between pb-3 border-b border-slate-700/60 mb-3">
             <div class="flex items-center gap-3">
@@ -270,7 +535,7 @@ function renderGalleryFeed(events) {
                 <i data-lucide="star" class="w-5 h-5 ${evt.favorite ? 'fill-amber-400 text-amber-400' : ''}"></i>
                 <span>${evt.favorite ? 'Favorited' : 'Favorite'}</span>
               </button>
-              <button onclick="editEvent('${evt.id}')" class="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-brand-300 transition" title="Edit Event & Photos">
+              <button onclick="editEvent('${evt.id}')" class="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-brand-300 transition" title="Edit Event & Notes">
                 <i data-lucide="edit-3" class="w-5 h-5"></i>
                 <span>Edit</span>
               </button>
@@ -287,13 +552,15 @@ function renderGalleryFeed(events) {
             ` : ''}
           </div>
 
-          <!-- EVENT TITLE & DESCRIPTION -->
           <div>
             <h3 class="font-extrabold text-lg text-white mb-1.5">${escapeHtml(evt.name)}</h3>
-            <p class="text-xs text-slate-300 leading-relaxed italic mb-3">
-              "${escapeHtml(evt.description || 'No description notes added.')}"
+            <p class="text-xs text-slate-300 leading-relaxed italic mb-2">
+              "${escapeHtml(evt.description || 'No notes added.')}"
             </p>
           </div>
+
+          <!-- AUDIO VOICE NOTE COMPONENT -->
+          ${evt.audio_url ? renderAudioPlayerComponent(evt.audio_url, evt.id) : ''}
         </div>
 
       </article>
@@ -450,7 +717,7 @@ async function migrateLocalDataToSupabase(userId) {
       }
     }
 
-    if (localEvts.length > 0) {
+    if (uniqueEvts.length > 0) {
       for (const evt of localEvts) {
         await state.supabase.from('events').upsert({
           id: evt.id,
@@ -460,6 +727,7 @@ async function migrateLocalDataToSupabase(userId) {
           description: evt.description || '',
           score: parseFloat(evt.score) || 5.0,
           photo_url: evt.photo_url || '',
+          audio_url: evt.audio_url || '',
           favorite: evt.favorite ? 1 : 0,
           tags: evt.tags || '',
           user_id: userId
@@ -591,7 +859,7 @@ function checkAuthAndLoad() {
 }
 
 function loadClientSession() {
-  const token = state.authToken;
+  const token = password;
   if (!token) {
     renderUserHeader();
     renderProfileTab();
@@ -815,7 +1083,7 @@ function handleClientAuth(mode, username, password, email) {
 
     return Promise.resolve({
       status: 201,
-      data: { user: { id: user.id, username: user.username, email: user.email }, token: `client_token_${user.id}` }
+      data: { user: { id: user.id, username: user.username, email: user.email }, token: `password}` }
     });
   } else {
     const user = users.find(u => (u.username === cleanUsername || u.email === email) && u.password === password);
@@ -824,7 +1092,7 @@ function handleClientAuth(mode, username, password, email) {
     }
     return Promise.resolve({
       status: 200,
-      data: { user: { id: user.id, username: user.username, email: user.email }, token: `client_token_${user.id}` }
+      data: { user: { id: user.id, username: user.username, email: user.email }, token: `password}` }
     });
   }
 }
@@ -1243,6 +1511,10 @@ function renderDrawerEventsList(events) {
           </div>
         </div>
         <p class="text-xs text-slate-300 line-clamp-2">${escapeHtml(evt.description || '')}</p>
+
+        <!-- VOICE NOTE COMPONENT -->
+        ${evt.audio_url ? renderAudioPlayerComponent(evt.audio_url, evt.id) : ''}
+
         <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
           <span>${formatDate(evt.date)}</span>
           <div class="flex items-center gap-2">
@@ -1476,7 +1748,10 @@ function renderEventsTable(events) {
           `}
         </td>
         <td class="px-4 py-3">
-          <div class="font-bold text-white">${escapeHtml(evt.name)}</div>
+          <div class="font-bold text-white flex items-center gap-2">
+            <span>${escapeHtml(evt.name)}</span>
+            ${evt.audio_url ? `<span class="px-1.5 py-0.2 rounded bg-brand-500/20 text-brand-300 text-[10px] font-bold flex items-center gap-0.5 border border-brand-500/30"><i data-lucide="mic" class="w-3 h-3"></i> Audio</span>` : ''}
+          </div>
           <div class="text-xs text-slate-400 line-clamp-1">${escapeHtml(evt.description || 'No description')}</div>
         </td>
         <td class="px-4 py-3">
@@ -1783,8 +2058,11 @@ function renderFavoritesGrid(events) {
             <p class="text-xs text-brand-400 font-medium flex items-center gap-1 mb-3">
               <i data-lucide="map-pin" class="w-3.5 h-3.5"></i> ${escapeHtml(evt.location_name || 'Spot')}
             </p>
-            <p class="text-xs text-slate-300 line-clamp-3 mb-4 italic">"${escapeHtml(evt.description || 'No notes added.')}"</p>
+            <p class="text-xs text-slate-300 line-clamp-3 mb-2 italic">"${escapeHtml(evt.description || 'No notes added.')}"</p>
           </div>
+
+          <!-- AUDIO VOICE NOTE COMPONENT -->
+          ${evt.audio_url ? renderAudioPlayerComponent(evt.audio_url, evt.id) : ''}
 
           <div class="pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
             <span>${formatDate(evt.date)}</span>
@@ -1864,7 +2142,7 @@ function editLocation(id) {
 }
 
 async function deleteLocation(locationId, locationName = 'this location') {
-  const confirmMsg = `Are you sure you want to delete "${locationName}"?\n\n⚠️ WARNING: All events and photos logged at this location will be permanently deleted as well.`;
+  const confirmMsg = `Are you sure you want to delete "${locationName}"?\n\n⚠️ WARNING: All events, photos, and voice notes logged at this location will be permanently deleted as well.`;
   if (!confirm(confirmMsg)) return;
 
   if (state.supabase) {
@@ -1972,7 +2250,7 @@ function setDefaultEventDate() {
 }
 
 // ==========================================
-// MULTI-PHOTO EVENT MODAL MANAGEMENT
+// MULTI-PHOTO & AUDIO EVENT MODAL MANAGEMENT
 // ==========================================
 function openAddEventModal(locationId = null) {
   if (!state.currentUser) {
@@ -1988,6 +2266,7 @@ function openAddEventModal(locationId = null) {
   document.getElementById('score-display-val').innerText = '9.0';
   document.getElementById('evt-input-favorite').checked = false;
   state.modalPhotos = [];
+  removeAttachedAudio();
   renderPhotoThumbnailsGrid();
   setDefaultEventDate();
 
@@ -2014,6 +2293,12 @@ function editEvent(id) {
 
   state.modalPhotos = getEventPhotos(evt);
   renderPhotoThumbnailsGrid();
+
+  if (evt.audio_url) {
+    setModalAudioAttachment(evt.audio_url);
+  } else {
+    removeAttachedAudio();
+  }
 
   openModal('modal-event');
 }
@@ -2153,17 +2438,31 @@ function handleEventSubmit(e) {
   const favorite = document.getElementById('evt-input-favorite').checked ? 1 : 0;
 
   const photo_url = JSON.stringify(state.modalPhotos);
+  const audio_url = state.modalAudio || '';
 
-  const payload = { location_id, name, date, score, description, photo_url, favorite };
+  const payload = { location_id, name, date, score, description, photo_url, audio_url, favorite };
 
   if (state.supabase) {
     const evtId = id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     state.supabase.from('events').upsert({ id: evtId, ...payload, user_id: state.currentUser.id }).then(({ data, error }) => {
       if (error) {
+        // If audio_url column does not exist on supabase yet, save without audio_url column to avoid block
+        if (error.message && error.message.includes('audio_url')) {
+          delete payload.audio_url;
+          state.supabase.from('events').upsert({ id: evtId, ...payload, user_id: state.currentUser.id }).then(() => {
+            closeModal('modal-event');
+            showToast('Event saved to Cloud! ⭐', 'success');
+            loadAllData();
+            if (state.selectedLocation && state.selectedLocation.id === location_id) {
+              openLocationDrawer(state.selectedLocation);
+            }
+          });
+          return;
+        }
         showToast(error.message, 'error');
       } else {
         closeModal('modal-event');
-        showToast('Event and photos saved to Cloud! ⭐', 'success');
+        showToast('Event, photos & voice note saved to Cloud! ⭐', 'success');
         loadAllData();
         if (state.selectedLocation && state.selectedLocation.id === location_id) {
           openLocationDrawer(state.selectedLocation);
@@ -2334,7 +2633,7 @@ function exportDataJSON() {
 
 function exportEventsCSV() {
   const events = state.events;
-  const headers = ['ID', 'Event Name', 'Location', 'Category', 'Date', 'Score', 'Favorite', 'Description', 'Photos Count', 'Photo URLs'];
+  const headers = ['ID', 'Event Name', 'Location', 'Category', 'Date', 'Score', 'Favorite', 'Description', 'Photos Count', 'Photo URLs', 'Audio Note Attached'];
   const rows = events.map(e => {
     const photos = getEventPhotos(e);
     return [
@@ -2347,7 +2646,8 @@ function exportEventsCSV() {
       e.favorite ? 'Yes' : 'No',
       `"${escapeCsv(e.description || '')}"`,
       photos.length,
-      `"${escapeCsv(photos.join(' ; '))}"`
+      `"${escapeCsv(photos.join(' ; '))}"`,
+      e.audio_url ? 'Yes' : 'No'
     ];
   });
 
