@@ -59,7 +59,89 @@
   <!-- Supabase Cloud Client (Local) -->
   <script src="./vendor/supabase.js"></script>
 
-  <link rel="stylesheet" href="./styles.css?v=25">
+  <style>
+    /* Multi-Page Print & PDF Styling for Safari, Chrome & Mobile */
+    @media print {
+      @page {
+        margin: 1.5cm;
+        size: A4 portrait;
+      }
+
+      header,
+      nav,
+      main,
+      #modal-auth,
+      #modal-location,
+      #modal-event,
+      #modal-share,
+      #modal-lightbox,
+      #modal-password,
+      #modal-cloud-config,
+      .no-print,
+      #toast-container {
+        display: none !important;
+      }
+
+      html,
+      body {
+        background: #ffffff !important;
+        color: #0f172a !important;
+        height: auto !important;
+        min-height: 100% !important;
+        max-height: none !important;
+        overflow: visible !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      #modal-diary-view {
+        position: static !important;
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        backdrop-filter: none !important;
+      }
+
+      #modal-diary-view > div {
+        max-width: 100% !important;
+        width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+      }
+
+      .diary-entry-card {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+        margin-bottom: 28px !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 16px !important;
+        padding: 20px !important;
+        background: #ffffff !important;
+        box-shadow: none !important;
+        display: block !important;
+      }
+
+      img {
+        max-width: 100% !important;
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+    }
+  </style>
 </head>
 <body class="bg-dark-900 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
@@ -1138,6 +1220,6 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <script src="./app.js?v=300"></script>
+  <script src="./app.js?v=350"></script>
 </body>
 </html>
