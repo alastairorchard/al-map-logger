@@ -73,7 +73,7 @@ function initKeyboardNav() {
 }
 
 // ==========================================
-// HELPER: EXTRACT PHOTO ARRAY FROM EVENT RECORD
+// HELPER: EXTRACT PHOTO & AUDIO FROM EVENT RECORD
 // ==========================================
 function getEventPhotos(evt) {
   if (!evt) return [];
@@ -105,6 +105,16 @@ function getEventPhotos(evt) {
     return [raw];
   }
   return [];
+}
+
+function getEventAudio(evt) {
+  if (!evt) return '';
+  if (evt.audio_url) return evt.audio_url;
+  if (evt.tags && typeof evt.tags === 'string' && evt.tags.includes('audio_data:')) {
+    const match = evt.tags.match(/audio_data:([^\s]+)/);
+    if (match && match[1]) return match[1];
+  }
+  return '';
 }
 
 // ==========================================
@@ -287,24 +297,34 @@ function resetModalAudioPlayer() {
 }
 
 // ==========================================
-// RENDER EVENT AUDIO NOTE PLAYER COMPONENT
+// RENDER EVENT AUDIO NOTE COMMENT COMPONENT
 // ==========================================
 function renderAudioPlayerComponent(audioUrl, eventId) {
   if (!audioUrl) return '';
 
   const playerId = `audio_player_${eventId}`;
   return `
-    <div class="flex items-center gap-3 p-3 rounded-2xl bg-brand-950/60 border border-brand-500/40 text-white mt-2 shadow-md select-none">
-      <button type="button" id="btn-${playerId}" onclick="event.stopPropagation(); togglePlayAudio('${playerId}')" class="w-9 h-9 rounded-full bg-brand-600 hover:bg-brand-500 text-white flex items-center justify-center shrink-0 shadow-lg transition active:scale-95">
-        <i data-lucide="play" class="w-4 h-4 ml-0.5" id="icon-${playerId}"></i>
-      </button>
-
-      <div class="flex-1 min-w-0">
-        <div class="flex items-center justify-between text-[11px] text-brand-300 font-bold mb-1">
-          <span class="flex items-center gap-1.5"><i data-lucide="mic" class="w-3.5 h-3.5"></i> Voice Note</span>
-          <span id="time-${playerId}" class="font-mono text-[10px] text-slate-300">0:00</span>
+    <div class="mt-3 p-3.5 rounded-2xl bg-dark-900/90 border border-brand-500/30 text-white shadow-lg flex flex-col gap-2 select-none">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-lg bg-gradient-to-tr from-brand-600 to-accent-500 text-white font-bold text-xs flex items-center justify-center">
+            <i data-lucide="mic" class="w-3.5 h-3.5"></i>
+          </div>
+          <span class="text-xs font-bold text-slate-200">Voice Note</span>
         </div>
-        <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden cursor-pointer" onclick="event.stopPropagation(); seekAudio(event, '${playerId}')">
+        <div class="flex items-center gap-2">
+          <span id="time-${playerId}" class="font-mono text-[11px] text-brand-300 font-bold">0:00</span>
+          <button type="button" onclick="event.stopPropagation(); deleteEventAudio('${eventId}')" class="p-1 text-slate-500 hover:text-red-400 rounded-lg transition" title="Delete voice note">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 pt-1">
+        <button type="button" id="btn-${playerId}" onclick="event.stopPropagation(); togglePlayAudio('${playerId}')" class="w-10 h-10 rounded-full bg-brand-600 hover:bg-brand-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-brand-600/30 transition active:scale-95">
+          <i data-lucide="play" class="w-4 h-4 ml-0.5" id="icon-${playerId}"></i>
+        </button>
+        <div class="flex-1 w-full bg-slate-800 rounded-full h-2 overflow-hidden cursor-pointer relative" onclick="event.stopPropagation(); seekAudio(event, '${playerId}')">
           <div id="prog-${playerId}" class="bg-gradient-to-r from-brand-500 to-accent-400 h-full rounded-full w-0 transition-all duration-100"></div>
         </div>
       </div>
@@ -312,6 +332,32 @@ function renderAudioPlayerComponent(audioUrl, eventId) {
       <audio id="${playerId}" src="${escapeHtml(audioUrl)}" class="hidden" ontimeupdate="updateAudioProgress(this, '${playerId}')" onended="resetAudioPlayer('${playerId}')"></audio>
     </div>
   `;
+}
+
+async function deleteEventAudio(eventId) {
+  if (!confirm('Are you sure you want to delete this voice note?')) return;
+  const evt = state.events.find(e => e.id === eventId);
+  if (!evt) return;
+
+  evt.audio_url = '';
+  if (evt.tags && typeof evt.tags === 'string') {
+    evt.tags = evt.tags.replace(/audio_data:[^\s]+/, '').trim();
+  }
+
+  if (state.supabase) {
+    showToast('Deleting voice note...', 'info');
+    await state.supabase.from('events').update({ audio_url: '', tags: evt.tags || '' }).eq('id', eventId);
+    showToast('Voice note deleted! 🗑️', 'info');
+    loadAllData();
+    return;
+  }
+
+  const uid = state.currentUser ? state.currentUser.id : null;
+  let evts = ClientDB.getEvents(uid);
+  evts = evts.map(e => e.id === eventId ? { ...e, audio_url: '', tags: evt.tags || '' } : e);
+  ClientDB.saveEvents(evts, uid);
+  showToast('Voice note deleted! 🗑️', 'info');
+  loadAllData();
 }
 
 function togglePlayAudio(playerId) {
@@ -486,6 +532,7 @@ function renderGalleryFeed(events) {
 
   container.innerHTML = events.map(evt => {
     const photos = getEventPhotos(evt);
+    const audioUrl = getEventAudio(evt);
     const photosJson = JSON.stringify(photos).replace(/"/g, '&quot;');
     const scoreVal = Number(evt.score).toFixed(1);
 
@@ -559,8 +606,8 @@ function renderGalleryFeed(events) {
             </p>
           </div>
 
-          <!-- AUDIO VOICE NOTE COMPONENT -->
-          ${evt.audio_url ? renderAudioPlayerComponent(evt.audio_url, evt.id) : ''}
+          <!-- AUDIO VOICE NOTE COMPONENT (COMMENT-STYLE BUBBLE) -->
+          ${audioUrl ? renderAudioPlayerComponent(audioUrl, evt.id) : ''}
         </div>
 
       </article>
@@ -1500,6 +1547,7 @@ function renderDrawerEventsList(events) {
 
   container.innerHTML = events.map(evt => {
     const photos = getEventPhotos(evt);
+    const audioUrl = getEventAudio(evt);
     return `
       <div class="bg-dark-900/90 rounded-2xl border border-slate-800 p-3 hover:border-slate-700 transition flex flex-col gap-2.5">
         ${renderInstagramCarousel(photos, evt.name, 'h-44')}
@@ -1513,7 +1561,7 @@ function renderDrawerEventsList(events) {
         <p class="text-xs text-slate-300 line-clamp-2">${escapeHtml(evt.description || '')}</p>
 
         <!-- VOICE NOTE COMPONENT -->
-        ${evt.audio_url ? renderAudioPlayerComponent(evt.audio_url, evt.id) : ''}
+        ${audioUrl ? renderAudioPlayerComponent(audioUrl, evt.id) : ''}
 
         <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-800/80">
           <span>${formatDate(evt.date)}</span>
@@ -2048,6 +2096,7 @@ function renderFavoritesGrid(events) {
 
   grid.innerHTML = events.map(evt => {
     const photos = getEventPhotos(evt);
+    const audioUrl = getEventAudio(evt);
     return `
       <div class="bg-dark-800 rounded-3xl overflow-hidden border border-slate-700/80 shadow-xl flex flex-col hover:border-amber-500/40 transition duration-300 group">
         ${renderInstagramCarousel(photos, evt.name, 'h-52')}
@@ -2062,7 +2111,7 @@ function renderFavoritesGrid(events) {
           </div>
 
           <!-- AUDIO VOICE NOTE COMPONENT -->
-          ${evt.audio_url ? renderAudioPlayerComponent(evt.audio_url, evt.id) : ''}
+          ${audioUrl ? renderAudioPlayerComponent(audioUrl, evt.id) : ''}
 
           <div class="pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
             <span>${formatDate(evt.date)}</span>
@@ -2440,18 +2489,22 @@ function handleEventSubmit(e) {
   const photo_url = JSON.stringify(state.modalPhotos);
   const audio_url = state.modalAudio || '';
 
-  const payload = { location_id, name, date, score, description, photo_url, audio_url, favorite };
+  let tags = '';
+  if (audio_url) {
+    tags = `audio_data:${audio_url}`;
+  }
+
+  const payload = { location_id, name, date, score, description, photo_url, audio_url, tags, favorite };
 
   if (state.supabase) {
     const evtId = id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     state.supabase.from('events').upsert({ id: evtId, ...payload, user_id: state.currentUser.id }).then(({ data, error }) => {
       if (error) {
-        // If audio_url column does not exist on supabase yet, save without audio_url column to avoid block
         if (error.message && error.message.includes('audio_url')) {
           delete payload.audio_url;
           state.supabase.from('events').upsert({ id: evtId, ...payload, user_id: state.currentUser.id }).then(() => {
             closeModal('modal-event');
-            showToast('Event saved to Cloud! ⭐', 'success');
+            showToast('Event & voice note saved to Cloud! ⭐', 'success');
             loadAllData();
             if (state.selectedLocation && state.selectedLocation.id === location_id) {
               openLocationDrawer(state.selectedLocation);
@@ -2462,7 +2515,7 @@ function handleEventSubmit(e) {
         showToast(error.message, 'error');
       } else {
         closeModal('modal-event');
-        showToast('Event, photos & voice note saved to Cloud! ⭐', 'success');
+        showToast('Event & voice note saved to Cloud! ⭐', 'success');
         loadAllData();
         if (state.selectedLocation && state.selectedLocation.id === location_id) {
           openLocationDrawer(state.selectedLocation);
