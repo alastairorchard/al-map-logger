@@ -70,12 +70,21 @@ function initKeyboardNav() {
 function getEventPhotos(evt) {
   if (!evt) return [];
   if (Array.isArray(evt.photos)) return evt.photos.filter(Boolean);
-  const raw = evt.photo_url || '';
+  let raw = evt.photo_url || '';
   if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+
   if (typeof raw === 'string') {
+    raw = raw.trim();
     if (raw.startsWith('[') && raw.endsWith(']')) {
       try {
         const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      } catch (e) {}
+    }
+    if (raw.startsWith('"[') && raw.endsWith(']"')) {
+      try {
+        const parsed = JSON.parse(JSON.parse(raw));
         if (Array.isArray(parsed)) return parsed.filter(Boolean);
       } catch (e) {}
     }
@@ -1860,14 +1869,20 @@ function renderPhotoThumbnailsGrid() {
   grid.innerHTML = state.modalPhotos.map((url, idx) => `
     <div class="relative h-20 rounded-xl overflow-hidden bg-dark-950 border border-slate-700 group">
       <img src="${escapeHtml(url)}" alt="Photo ${idx + 1}" class="w-full h-full object-cover">
-      <button type="button" onclick="removePhotoAtIndex(${idx})" class="absolute top-1 right-1 p-1 bg-black/75 hover:bg-red-600 text-white rounded-full transition shadow" title="Remove Photo">
+      <button type="button" onclick="removePhotoAtIndex(${idx})" class="absolute top-1 right-1 p-1 bg-black/80 hover:bg-red-600 text-white rounded-full transition shadow" title="Remove Photo">
         <i data-lucide="x" class="w-3 h-3"></i>
       </button>
       <span class="absolute bottom-1 left-1 px-1.5 py-0.2 rounded bg-black/70 text-[9px] font-bold text-slate-300">
         #${idx + 1}
       </span>
     </div>
-  `).join('');
+  `).join('') + `
+    <label class="h-20 rounded-xl border border-dashed border-slate-600 hover:border-brand-500 bg-dark-900 hover:bg-dark-700/80 cursor-pointer flex flex-col items-center justify-center gap-1 transition text-slate-400 hover:text-brand-300">
+      <i data-lucide="plus" class="w-5 h-5"></i>
+      <span class="text-[10px] font-bold">+ Add More</span>
+      <input type="file" multiple accept="image/*" class="hidden" onchange="handleMultiplePhotosSelected(this)">
+    </label>
+  `;
 
   initIcons();
 }
