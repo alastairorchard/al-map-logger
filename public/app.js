@@ -2664,6 +2664,8 @@ function exportDiaryPDF() {
     return;
   }
 
+  showToast('Generating printable multi-page diary...', 'info');
+
   const sortedEvents = [...state.events].sort((a, b) => new Date(a.date) - new Date(b.date));
   const userLabel = state.currentUser ? (state.currentUser.email || state.currentUser.username) : 'Guest';
   const totalEvents = sortedEvents.length;
@@ -2672,40 +2674,37 @@ function exportDiaryPDF() {
   const firstDate = formatDate(sortedEvents[0].date);
   const lastDate = formatDate(sortedEvents[sortedEvents.length - 1].date);
 
-  const container = document.getElementById('diary-document-body');
-  if (!container) return;
-
   const entriesHtml = sortedEvents.map((evt, idx) => {
     const photos = getEventPhotos(evt);
     const audioUrl = getEventAudio(evt);
 
     let photosMarkup = '';
     if (photos.length > 0) {
-      photosMarkup = '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 my-4">' + 
-        photos.map(p => '<img src="' + escapeHtml(p) + '" class="w-full h-40 object-cover rounded-xl border border-slate-200" alt="' + escapeHtml(evt.name) + '">').join('') + 
+      photosMarkup = '<div class="photo-grid">' + 
+        photos.map(p => '<img src="' + escapeHtml(p) + '" class="photo-img" alt="' + escapeHtml(evt.name) + '">').join('') + 
       '</div>';
     }
 
     let descMarkup = '';
     if (evt.description) {
-      descMarkup = '<div class="p-4 rounded-xl bg-slate-50 border-l-4 border-purple-700 text-slate-700 italic text-sm font-serif leading-relaxed mt-3">"' + escapeHtml(evt.description) + '"</div>';
+      descMarkup = '<div class="entry-narrative">"' + escapeHtml(evt.description) + '"</div>';
     }
 
     let audioMarkup = '';
     if (audioUrl) {
-      audioMarkup = '<div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-50 text-purple-700 text-xs font-bold mt-2 border border-purple-200">🎙️ Voice note attached</div>';
+      audioMarkup = '<div class="audio-badge">🎙️ Voice note recorded with this event</div>';
     }
 
-    return '<article class="diary-entry-card p-6 rounded-2xl border border-slate-200 bg-white shadow-sm mb-6">' +
-      '<div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">' +
-        '<span class="text-xs font-bold uppercase tracking-wider text-purple-700">#' + (idx + 1) + ' — ' + formatDate(evt.date) + '</span>' +
-        '<span class="text-xs font-extrabold px-3 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">⭐ ' + Number(evt.score).toFixed(1) + ' / 10</span>' +
+    return '<article class="diary-entry">' +
+      '<div class="entry-header-row">' +
+        '<span class="entry-date">#' + (idx + 1) + ' — ' + formatDate(evt.date) + '</span>' +
+        '<span class="entry-score">⭐ ' + Number(evt.score).toFixed(1) + ' / 10</span>' +
       '</div>' +
-      '<h2 class="text-2xl font-bold text-slate-900 font-serif mb-1">' + escapeHtml(evt.name) + '</h2>' +
-      '<div class="text-xs text-slate-500 font-semibold mb-3 flex items-center gap-1.5">' +
-        '<span>📍 ' + escapeHtml(evt.location_name || 'Spot') + '</span>' +
+      '<h2 class="entry-title">' + escapeHtml(evt.name) + '</h2>' +
+      '<div class="entry-loc-line">' +
+        '<span>📍 ' + escapeHtml(evt.location_name || 'Location') + '</span>' +
         '<span>•</span>' +
-        '<span>' + escapeHtml(evt.location_category || 'Location') + '</span>' +
+        '<span>' + escapeHtml(evt.location_category || 'Spot') + '</span>' +
       '</div>' +
       photosMarkup +
       descMarkup +
@@ -2713,39 +2712,280 @@ function exportDiaryPDF() {
     '</article>';
   }).join('\n');
 
-  container.innerHTML = `
-    <header class="pb-6 mb-8 border-b-2 border-slate-900">
-      <div class="text-3xl font-black text-purple-700 tracking-tight mb-2">AL</div>
-      <h1 class="text-3xl sm:text-4xl font-bold text-slate-900 font-serif tracking-tight mb-1">Personal Experience Diary</h1>
-      <p class="text-xs sm:text-sm text-slate-500">Chronological travel log & rated moments for <strong>${escapeHtml(userLabel)}</strong></p>
+  const printHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AL — Experience Diary (${escapeHtml(userLabel)})</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    
+    * { box-sizing: border-box; }
+    
+    @page {
+      margin: 15mm 12mm 15mm 12mm;
+      size: auto;
+    }
 
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+    html, body {
+      background: #ffffff;
+      color: #0f172a;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      line-height: 1.5;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    @media screen {
+      body {
+        background: #090b10;
+        padding: 24px 16px 60px 16px;
+      }
+      .page-wrapper {
+        max-width: 820px;
+        margin: 0 auto;
+        background: #ffffff;
+        padding: 40px;
+        border-radius: 24px;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+      }
+      .top-action-bar {
+        max-width: 820px;
+        margin: 0 auto 16px auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 18px;
+        background: #111622;
+        border: 1px solid #1e293b;
+        border-radius: 16px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #ffffff !important;
+        padding: 0 !important;
+      }
+      .page-wrapper {
+        max-width: 100% !important;
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      }
+      .top-action-bar {
+        display: none !important;
+      }
+      .diary-entry {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+    }
+
+    .diary-cover-header {
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    .diary-logo {
+      font-size: 28px;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      color: #6d28d9;
+      margin-bottom: 4px;
+    }
+    .diary-main-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 32px;
+      font-weight: 700;
+      margin: 0 0 4px 0;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+    }
+    .diary-user-subtitle {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 18px;
+    }
+
+    .diary-stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 14px;
+      text-align: center;
+    }
+    .stat-number {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .stat-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #64748b;
+      margin-top: 2px;
+    }
+
+    .diary-entry {
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 26px;
+      background: #ffffff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .entry-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #f1f5f9;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+    .entry-date {
+      font-size: 12px;
+      font-weight: 700;
+      color: #6d28d9;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .entry-score {
+      font-size: 13px;
+      font-weight: 800;
+      background: #fef3c7;
+      color: #92400e;
+      padding: 2px 10px;
+      border-radius: 999px;
+      border: 1px solid #fde68a;
+    }
+    .entry-title {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 4px 0;
+      color: #0f172a;
+    }
+    .entry-loc-line {
+      font-size: 12px;
+      color: #475569;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+    .photo-img {
+      width: 100%;
+      height: 150px;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+    .entry-narrative {
+      font-family: Georgia, serif;
+      font-style: italic;
+      font-size: 14px;
+      line-height: 1.65;
+      color: #334155;
+      background: #f8fafc;
+      padding: 14px 18px;
+      border-radius: 12px;
+      border-left: 4px solid #6d28d9;
+      margin-top: 12px;
+    }
+    .audio-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #6d28d9;
+      background: #ede9fe;
+      padding: 3px 10px;
+      border-radius: 8px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-action-bar">
+    <button onclick="window.print()" style="background:#7c3aed; color:#ffffff; font-weight:700; font-size:13px; padding:8px 18px; border:none; border-radius:10px; cursor:pointer; display:flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(124,58,237,0.3);">
+      🖨️ Print / Save to PDF
+    </button>
+    <div style="font-size:12px; color:#94a3b8;">
+      Select <strong>"Save as PDF"</strong> in your print options
+    </div>
+  </div>
+
+  <div class="page-wrapper">
+    <header class="diary-cover-header">
+      <div class="diary-logo">AL</div>
+      <h1 class="diary-main-title">Personal Experience Diary</h1>
+      <div class="diary-user-subtitle">Chronological travel log & rated moments for <strong>${escapeHtml(userLabel)}</strong></div>
+      
+      <div class="diary-stats-bar">
         <div>
-          <div class="text-2xl font-extrabold text-slate-900">${totalEvents}</div>
-          <div class="text-[10px] uppercase font-bold text-slate-500 mt-0.5">Total Events</div>
+          <div class="stat-number">${totalEvents}</div>
+          <div class="stat-label">Total Events</div>
         </div>
         <div>
-          <div class="text-2xl font-extrabold text-slate-900">${totalLocations}</div>
-          <div class="text-[10px] uppercase font-bold text-slate-500 mt-0.5">Unique Spots</div>
+          <div class="stat-number">${totalLocations}</div>
+          <div class="stat-label">Unique Spots</div>
         </div>
         <div>
-          <div class="text-2xl font-extrabold text-amber-600">⭐ ${avgScore}</div>
-          <div class="text-[10px] uppercase font-bold text-slate-500 mt-0.5">Avg Score</div>
+          <div class="stat-number" style="color:#d97706;">⭐ ${avgScore}</div>
+          <div class="stat-label">Avg Score</div>
         </div>
         <div>
-          <div class="text-xs font-extrabold text-slate-800 mt-1.5">${escapeHtml(firstDate.split(',')[0])} – ${escapeHtml(lastDate.split(',')[0])}</div>
-          <div class="text-[10px] uppercase font-bold text-slate-500 mt-0.5">Timeline Span</div>
+          <div class="stat-number" style="font-size:12px; margin-top:4px;">${escapeHtml(firstDate.split(',')[0])} – ${escapeHtml(lastDate.split(',')[0])}</div>
+          <div class="stat-label">Timeline Span</div>
         </div>
       </div>
     </header>
 
-    <main class="space-y-6">
+    <main class="diary-entries-list">
       ${entriesHtml}
     </main>
-  `;
+  </div>
 
-  openModal('modal-diary-view');
-  initIcons();
+  <script>
+    // Auto-focus and open print sheet
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        window.print();
+      }, 600);
+    });
+  </script>
+</body>
+</html>`;
+
+  // Create a standalone Blob URL to guarantee 100% clean multi-page pagination
+  const blob = new Blob([printHtml], { type: 'text/html;charset=utf-8' });
+  const blobUrl = URL.createObjectURL(blob);
+  const printWindow = window.open(blobUrl, '_blank');
+  
+  if (!printWindow) {
+    // If popup was blocked on mobile Safari, fallback to direct location
+    window.location.href = blobUrl;
+  }
 }
 
 function exportDataJSON() {
