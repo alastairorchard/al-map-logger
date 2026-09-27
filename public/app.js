@@ -1,7 +1,13 @@
 // AL - Map & Event Logger (Multi-Photo Instagram Carousel, Multi-User Cloud Sync)
 
 const DEFAULT_SUPABASE_URL = 'https://bfwlzobdpbuippfbbjud.supabase.co';
-const DEFAULT_SUPABASE_KEY = '***';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_PcDpOFZptvEbE0wL8qDyLA_uqqkkf0A';
+
+// Clear legacy broken storage keys on startup
+try {
+  localStorage.removeItem('al_supabase_key');
+  localStorage.removeItem('al_supabase_url');
+} catch (e) {}
 
 // State Management
 let state = {
