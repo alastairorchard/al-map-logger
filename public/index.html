@@ -219,6 +219,9 @@
         </div>
 
         <div class="flex items-center gap-2">
+          <button onclick="exportDiaryPDF()" class="px-3 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-accent-600 hover:opacity-95 text-white text-xs font-bold shadow flex items-center gap-1.5 transition">
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print Diary
+          </button>
           <select id="gallery-sort-filter" class="bg-dark-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-brand-500 shadow" onchange="loadGalleryFeed()">
             <option value="score_desc">⭐ Top Rated First</option>
             <option value="date_desc">📅 Newest Date First</option>
@@ -256,8 +259,8 @@
         </div>
 
         <div class="flex items-center gap-2 flex-wrap">
-          <button onclick="exportDiaryPDF()" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-accent-600 hover:opacity-95 text-white text-xs font-bold shadow-lg shadow-brand-500/20 flex items-center gap-1.5 transition">
-            <i data-lucide="book-open" class="w-3.5 h-3.5"></i> Export Diary PDF
+          <button onclick="exportDiaryPDF()" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-accent-600 hover:opacity-95 text-white text-xs font-bold shadow-lg shadow-brand-500/25 flex items-center gap-1.5 transition">
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print Diary
           </button>
           <button onclick="exportDataJSON()" class="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-slate-300 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition">
             <i data-lucide="download" class="w-3.5 h-3.5"></i> Export JSON
@@ -595,8 +598,8 @@
             <p class="text-xs text-slate-400">Download a full JSON or CSV export of all your logged spots.</p>
           </div>
           <div class="flex items-center gap-2">
-            <button onclick="exportDiaryPDF()" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-accent-600 text-white text-xs font-bold shadow flex items-center gap-1.5">
-              <i data-lucide="book-open" class="w-3.5 h-3.5"></i> PDF Diary
+            <button onclick="exportDiaryPDF()" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-accent-600 text-white text-xs font-bold shadow-lg shadow-brand-500/25 flex items-center gap-1.5">
+              <i data-lucide="printer" class="w-3.5 h-3.5"></i> Print Diary
             </button>
             <button onclick="exportDataJSON()" class="px-3.5 py-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-200 text-xs font-semibold border border-slate-600">
               JSON
@@ -1112,6 +1115,6 @@
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <script src="./app.js?v=200"></script>
+  <script src="./app.js?v=220"></script>
 </body>
 </html>
