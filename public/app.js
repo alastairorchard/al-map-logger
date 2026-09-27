@@ -2664,7 +2664,7 @@ function exportDiaryPDF() {
     return;
   }
 
-  showToast('Generating Diary PDF document...', 'info');
+  showToast('Generating Printable Diary...', 'info');
 
   const sortedEvents = [...state.events].sort((a, b) => new Date(a.date) - new Date(b.date));
   const userLabel = state.currentUser ? (state.currentUser.email || state.currentUser.username) : 'Guest';
@@ -2674,8 +2674,43 @@ function exportDiaryPDF() {
   const firstDate = formatDate(sortedEvents[0].date);
   const lastDate = formatDate(sortedEvents[sortedEvents.length - 1].date);
 
-  const printHtml = `
-<!DOCTYPE html>
+  const entriesHtml = sortedEvents.map((evt, idx) => {
+    const photos = getEventPhotos(evt);
+    const audioUrl = getEventAudio(evt);
+    
+    let photosMarkup = '';
+    if (photos.length > 0) {
+      photosMarkup = '<div class="photo-grid">' + photos.map(p => '<img src="' + escapeHtml(p) + '" class="photo-img" alt="' + escapeHtml(evt.name) + '">').join('') + '</div>';
+    }
+
+    let descMarkup = '';
+    if (evt.description) {
+      descMarkup = '<div class="entry-narrative">"' + escapeHtml(evt.description) + '"</div>';
+    }
+
+    let audioMarkup = '';
+    if (audioUrl) {
+      audioMarkup = '<div class="audio-badge">🎙️ Voice note recorded with this event</div>';
+    }
+
+    return '<article class="diary-entry">' +
+      '<div class="entry-date-bar">' +
+        '<span class="entry-date">#' + (idx + 1) + ' — ' + formatDate(evt.date) + '</span>' +
+        '<span class="entry-score">⭐ ' + Number(evt.score).toFixed(1) + ' / 10</span>' +
+      '</div>' +
+      '<h2 class="entry-name">' + escapeHtml(evt.name) + '</h2>' +
+      '<div class="entry-location">' +
+        '<span>📍 ' + escapeHtml(evt.location_name || 'Location') + '</span>' +
+        '<span>•</span>' +
+        '<span>' + escapeHtml(evt.location_category || 'Spot') + '</span>' +
+      '</div>' +
+      photosMarkup +
+      descMarkup +
+      audioMarkup +
+    '</article>';
+  }).join('');
+
+  const printHtml = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -2701,7 +2736,7 @@ function exportDiaryPDF() {
 
     @media print {
       body { background: #ffffff; }
-      .page-container { padding: 0; }
+      .page-container { padding: 0; box-shadow: none; border-radius: 0; }
       .no-print-bar { display: none !important; }
       .diary-entry { page-break-inside: avoid; }
     }
@@ -2843,73 +2878,34 @@ function exportDiaryPDF() {
     <header class="diary-header">
       <div class="diary-logo">AL</div>
       <h1 class="diary-title">Personal Experience Diary</h1>
-      <div class="diary-subtitle">Chronological travel log & rated moments for <strong>\${escapeHtml(userLabel)}</strong></div>
+      <div class="diary-subtitle">Chronological travel log & rated moments for <strong>${escapeHtml(userLabel)}</strong></div>
       
       <div class="diary-stats-grid">
         <div class="stat-box">
-          <div class="stat-val">\${totalEvents}</div>
+          <div class="stat-val">${totalEvents}</div>
           <div class="stat-lbl">Total Events</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val">\${totalLocations}</div>
+          <div class="stat-val">${totalLocations}</div>
           <div class="stat-lbl">Unique Spots</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val">⭐ \${avgScore}</div>
+          <div class="stat-val">⭐ ${avgScore}</div>
           <div class="stat-lbl">Avg Score</div>
         </div>
         <div class="stat-box">
-          <div class="stat-val" style="font-size:13px; margin-top:6px;">\${firstDate.split(',')[0]} – \${lastDate.split(',')[0]}</div>
+          <div class="stat-val" style="font-size:13px; margin-top:6px;">${escapeHtml(firstDate.split(',')[0])} – ${escapeHtml(lastDate.split(',')[0])}</div>
           <div class="stat-lbl">Timeline Span</div>
         </div>
       </div>
     </header>
 
     <main class="diary-entries">
-      \${sortedEvents.map((evt, idx) => {
-        const photos = getEventPhotos(evt);
-        const audioUrl = getEventAudio(evt);
-        return \`
-          <article class="diary-entry">
-            <div class="entry-date-bar">
-              <span class="entry-date">#\${idx + 1} — \${formatDate(evt.date)}</span>
-              <span class="entry-score">⭐ \${Number(evt.score).toFixed(1)} / 10</span>
-            </div>
-
-            <h2 class="entry-name">\${escapeHtml(evt.name)}</h2>
-            <div class="entry-location">
-              <span>📍 \${escapeHtml(evt.location_name || 'Location')}</span>
-              <span>•</span>
-              <span>\${escapeHtml(evt.location_category || 'Spot')}</span>
-            </div>
-
-            \${photos.length > 0 ? \`
-              <div class="photo-grid">
-                \${photos.map(p => \`
-                  <img src="\${escapeHtml(p)}" class="photo-img" alt="\${escapeHtml(evt.name)}">
-                \`).join('')}
-              </div>
-            \` : ''}
-
-            \${evt.description ? \`
-              <div class="entry-narrative">
-                "\${escapeHtml(evt.description)}"
-              </div>
-            \` : ''}
-
-            \${audioUrl ? \`
-              <div class="audio-badge">
-                🎙️ Voice note recorded with this event
-              </div>
-            \` : ''}
-          </article>
-        \`;
-      }).join('')}
+      ${entriesHtml}
     </main>
   </div>
 </body>
-</html>
-  `;
+</html>`;
 
   const printWindow = window.open('', '_blank');
   if (printWindow) {
@@ -2917,9 +2913,9 @@ function exportDiaryPDF() {
     printWindow.document.close();
     setTimeout(() => {
       printWindow.focus();
-    }, 500);
+    }, 400);
   } else {
-    showToast('Please allow popup windows to export PDF.', 'error');
+    showToast('Please allow popup windows to print diary.', 'error');
   }
 }
 
