@@ -1112,9 +1112,32 @@
     </div>
   </div>
 
+  <!-- MODAL: IN-APP PRINTABLE DIARY VIEW -->
+  <div id="modal-diary-view" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden flex flex-col p-2 sm:p-6 overflow-y-auto" onclick="closeModal('modal-diary-view')">
+    <div class="max-w-4xl w-full mx-auto bg-white text-slate-900 rounded-3xl shadow-2xl p-6 sm:p-10 relative my-auto min-h-[80vh]" onclick="event.stopPropagation()">
+      <!-- Sticky Action Bar -->
+      <div class="flex items-center justify-between pb-4 border-b-2 border-slate-900 mb-6 no-print">
+        <div class="flex items-center gap-2">
+          <button onclick="window.print()" class="px-4 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold shadow-lg flex items-center gap-2 transition">
+            <i data-lucide="printer" class="w-4 h-4"></i> Print / Save as PDF
+          </button>
+          <span class="text-xs text-slate-500 hidden sm:inline">(Choose "Save as PDF" in your print options)</span>
+        </div>
+        <button onclick="closeModal('modal-diary-view')" class="p-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 transition" title="Close Diary">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Diary Document Body -->
+      <div id="diary-document-body">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
 
-  <script src="./app.js?v=250"></script>
+  <script src="./app.js?v=300"></script>
 </body>
 </html>
