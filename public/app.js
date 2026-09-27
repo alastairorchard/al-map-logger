@@ -270,6 +270,10 @@ function renderGalleryFeed(events) {
                 <i data-lucide="star" class="w-5 h-5 ${evt.favorite ? 'fill-amber-400 text-amber-400' : ''}"></i>
                 <span>${evt.favorite ? 'Favorited' : 'Favorite'}</span>
               </button>
+              <button onclick="editEvent('${evt.id}')" class="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-brand-300 transition" title="Edit Event & Photos">
+                <i data-lucide="edit-3" class="w-5 h-5"></i>
+                <span>Edit</span>
+              </button>
               <button onclick="openShareModal('${evt.id}')" class="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-accent-400 transition" title="Share">
                 <i data-lucide="share-2" class="w-5 h-5"></i>
                 <span>Share</span>
