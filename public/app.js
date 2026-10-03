@@ -26,6 +26,7 @@ let state = {
     key: DEFAULT_SUPABASE_KEY
   },
   modalPhotos: [],
+  modalVideos: [],
   modalAudio: null, // Audio note Data URL or Cloud URL
   audioRecorder: {
     mediaRecorder: null,
@@ -115,6 +116,67 @@ function getEventAudio(evt) {
     if (match && match[1]) return match[1];
   }
   return '';
+}
+
+function getEventVideos(evt) {
+  if (!evt) return [];
+  if (Array.isArray(evt.videos)) return evt.videos.filter(Boolean);
+  let raw = evt.video_url || '';
+  if (!raw && evt.tags && typeof evt.tags === 'string' && evt.tags.includes('video_data:')) {
+    const match = evt.tags.match(/video_data:([^\s]+)/);
+    if (match && match[1]) raw = match[1];
+  }
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter(Boolean);
+
+  if (typeof raw === 'string') {
+    raw = raw.trim();
+    if (raw.startsWith('[') && raw.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      } catch (e) {}
+    }
+    if (raw.startsWith('"[') && raw.endsWith(']"')) {
+      try {
+        const parsed = JSON.parse(JSON.parse(raw));
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+      } catch (e) {}
+    }
+    if (raw.includes('|||')) {
+      return raw.split('|||').map(s => s.trim()).filter(Boolean);
+    }
+    if (raw.includes(',') && !raw.startsWith('data:video')) {
+      return raw.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [raw];
+  }
+  return [];
+}
+
+function renderVideoPlayerComponent(videoUrls, evtId) {
+  if (!videoUrls || videoUrls.length === 0) return '';
+  const urls = Array.isArray(videoUrls) ? videoUrls.filter(Boolean) : [videoUrls];
+  if (urls.length === 0) return '';
+
+  return `
+    <div class="mt-3.5 space-y-2">
+      <div class="flex items-center gap-1.5 text-xs font-bold text-accent-400">
+        <i data-lucide="video" class="w-4 h-4"></i>
+        <span>Attached Video${urls.length > 1 ? `s (${urls.length})` : ''}</span>
+      </div>
+      <div class="grid grid-cols-1 ${urls.length > 1 ? 'sm:grid-cols-2' : ''} gap-3">
+        ${urls.map((vUrl, idx) => `
+          <div class="relative rounded-2xl overflow-hidden bg-black border border-slate-700/80 shadow-inner group">
+            <video controls playsinline preload="metadata" class="w-full max-h-72 object-contain bg-black rounded-2xl">
+              <source src="${escapeHtml(vUrl)}">
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 // ==========================================
@@ -608,6 +670,9 @@ function renderGalleryFeed(events) {
               "${escapeHtml(evt.description || 'No notes added.')}"
             </p>
           </div>
+
+          <!-- VIDEO ATTACHMENTS PLAYER -->
+          ${renderVideoPlayerComponent(getEventVideos(evt), evt.id)}
 
           <!-- AUDIO VOICE NOTE COMPONENT (COMMENT-STYLE BUBBLE) -->
           ${audioUrl ? renderAudioPlayerComponent(audioUrl, evt.id) : ''}
@@ -1563,6 +1628,9 @@ function renderDrawerEventsList(events) {
         </div>
         <p class="text-xs text-slate-300 line-clamp-2">${escapeHtml(evt.description || '')}</p>
 
+        <!-- VIDEO ATTACHMENTS PLAYER -->
+        ${renderVideoPlayerComponent(getEventVideos(evt), evt.id)}
+
         <!-- VOICE NOTE COMPONENT -->
         ${audioUrl ? renderAudioPlayerComponent(audioUrl, evt.id) : ''}
 
@@ -2113,6 +2181,9 @@ function renderFavoritesGrid(events) {
             <p class="text-xs text-slate-300 line-clamp-3 mb-2 italic">"${escapeHtml(evt.description || 'No notes added.')}"</p>
           </div>
 
+          <!-- VIDEO ATTACHMENTS PLAYER -->
+          ${renderVideoPlayerComponent(getEventVideos(evt), evt.id)}
+
           <!-- AUDIO VOICE NOTE COMPONENT -->
           ${audioUrl ? renderAudioPlayerComponent(audioUrl, evt.id) : ''}
 
@@ -2318,8 +2389,10 @@ function openAddEventModal(locationId = null) {
   document.getElementById('score-display-val').innerText = '9.0';
   document.getElementById('evt-input-favorite').checked = false;
   state.modalPhotos = [];
+  state.modalVideos = [];
   removeAttachedAudio();
   renderPhotoThumbnailsGrid();
+  renderVideoThumbnailsGrid();
   setDefaultEventDate();
 
   if (locationId) {
@@ -2344,7 +2417,9 @@ function editEvent(id) {
   document.getElementById('evt-input-favorite').checked = evt.favorite === 1 || evt.favorite === true;
 
   state.modalPhotos = getEventPhotos(evt);
+  state.modalVideos = getEventVideos(evt);
   renderPhotoThumbnailsGrid();
+  renderVideoThumbnailsGrid();
 
   if (evt.audio_url) {
     setModalAudioAttachment(evt.audio_url);
@@ -2445,6 +2520,123 @@ function compressImageFile(file, maxWidth = 1200, quality = 0.82) {
   });
 }
 
+// ==========================================
+// VIDEO UPLOAD & THUMBNAIL MANAGEMENT
+// ==========================================
+function renderVideoThumbnailsGrid() {
+  const grid = document.getElementById('video-thumbnails-grid');
+  const countBadge = document.getElementById('video-count-badge');
+  if (!grid) return;
+
+  const count = (state.modalVideos || []).length;
+  if (countBadge) {
+    if (count > 0) {
+      countBadge.innerText = `${count} video${count === 1 ? '' : 's'} attached`;
+      countBadge.classList.remove('hidden');
+    } else {
+      countBadge.classList.add('hidden');
+    }
+  }
+
+  if (count === 0) {
+    grid.innerHTML = '';
+    return;
+  }
+
+  grid.innerHTML = state.modalVideos.map((url, idx) => `
+    <div class="relative rounded-xl overflow-hidden bg-dark-950 border border-slate-700 group h-24 flex items-center justify-center">
+      <video src="${escapeHtml(url)}" preload="metadata" class="w-full h-full object-cover"></video>
+      <div class="absolute inset-0 bg-black/40 flex items-center justify-center pointer-events-none">
+        <i data-lucide="play-circle" class="w-6 h-6 text-accent-400"></i>
+      </div>
+      <button type="button" onclick="removeVideoAtIndex(${idx})" class="absolute top-1 right-1 p-1 bg-black/80 hover:bg-red-600 text-white rounded-full transition shadow z-10" title="Remove Video">
+        <i data-lucide="x" class="w-3 h-3"></i>
+      </button>
+      <span class="absolute bottom-1 left-1.5 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-slate-300">
+        Video ${idx + 1}
+      </span>
+    </div>
+  `).join('');
+
+  initIcons();
+}
+
+function removeVideoAtIndex(index) {
+  state.modalVideos.splice(index, 1);
+  renderVideoThumbnailsGrid();
+}
+
+function addVideoUrlFromInput() {
+  const input = document.getElementById('evt-input-video-url');
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val) return;
+
+  if (!state.modalVideos) state.modalVideos = [];
+  state.modalVideos.push(val);
+  input.value = '';
+  renderVideoThumbnailsGrid();
+  showToast('Video URL added! 📹', 'success');
+}
+
+async function handleMultipleVideosSelected(input) {
+  if (!input.files || input.files.length === 0) return;
+  const files = Array.from(input.files);
+
+  showToast(`Processing ${files.length} video${files.length === 1 ? '' : 's'}...`, 'info');
+
+  for (const file of files) {
+    // Read file as Data URL / blob URL for instant preview & persistence
+    const fileReader = new FileReader();
+    const dataUrlPromise = new Promise((resolve) => {
+      fileReader.onload = (e) => resolve(e.target.result);
+      fileReader.onerror = () => resolve(null);
+      fileReader.readAsDataURL(file);
+    });
+
+    const dataUrl = await dataUrlPromise;
+    if (dataUrl) {
+      if (!state.modalVideos) state.modalVideos = [];
+      state.modalVideos.push(dataUrl);
+      renderVideoThumbnailsGrid();
+
+      if (state.supabase) {
+        const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`;
+        // Try uploading to 'videos' bucket or fallback to 'photos'
+        state.supabase.storage.from('videos').upload(filename, file, { upsert: true }).then(({ data, error }) => {
+          if (!error) {
+            const { data: publicUrlData } = state.supabase.storage.from('videos').getPublicUrl(filename);
+            if (publicUrlData && publicUrlData.publicUrl) {
+              const idx = state.modalVideos.indexOf(dataUrl);
+              if (idx !== -1) {
+                state.modalVideos[idx] = publicUrlData.publicUrl;
+                renderVideoThumbnailsGrid();
+              }
+            }
+          } else {
+            // Try uploading to photos bucket if videos bucket isn't created
+            state.supabase.storage.from('photos').upload(filename, file, { upsert: true }).then(({ data: pData, error: pError }) => {
+              if (!pError) {
+                const { data: pUrlData } = state.supabase.storage.from('photos').getPublicUrl(filename);
+                if (pUrlData && pUrlData.publicUrl) {
+                  const idx = state.modalVideos.indexOf(dataUrl);
+                  if (idx !== -1) {
+                    state.modalVideos[idx] = pUrlData.publicUrl;
+                    renderVideoThumbnailsGrid();
+                  }
+                }
+              }
+            }).catch(() => {});
+          }
+        }).catch(() => {});
+      }
+    }
+  }
+
+  input.value = '';
+  showToast(`${files.length} video${files.length === 1 ? '' : 's'} added! 📹`, 'success');
+}
+
 async function handleMultiplePhotosSelected(input) {
   if (!input.files || input.files.length === 0) return;
   const files = Array.from(input.files);
@@ -2489,14 +2681,17 @@ function handleEventSubmit(e) {
   const description = document.getElementById('evt-input-description').value;
   const favorite = document.getElementById('evt-input-favorite').checked ? 1 : 0;
 
-  const photo_url = JSON.stringify(state.modalPhotos);
+  const photo_url = JSON.stringify(state.modalPhotos || []);
+  const video_url = JSON.stringify(state.modalVideos || []);
   const audio_url = state.modalAudio || '';
 
   const existingEvt = id ? state.events.find(ev => ev.id === id) : null;
-  let cleanTags = existingEvt && existingEvt.tags ? existingEvt.tags.replace(/audio_data:[^\s]+/g, '').trim() : '';
-  let tags = audio_url ? `${cleanTags} audio_data:${audio_url}`.trim() : cleanTags;
+  let cleanTags = existingEvt && existingEvt.tags ? existingEvt.tags.replace(/audio_data:[^\s]+/g, '').replace(/video_data:[^\s]+/g, '').trim() : '';
+  let tags = cleanTags;
+  if (audio_url) tags = `${tags} audio_data:${audio_url}`.trim();
+  if (state.modalVideos && state.modalVideos.length > 0) tags = `${tags} video_data:${video_url}`.trim();
 
-  const payload = { location_id, name, date, score, description, photo_url, tags, favorite };
+  const payload = { location_id, name, date, score, description, photo_url, video_url, tags, favorite };
 
   if (state.supabase) {
     const evtId = id || `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
